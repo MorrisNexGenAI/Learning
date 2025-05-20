@@ -43,6 +43,11 @@ INSTALLED_APPS = [
     'subjects',
     'levels',
     'rest_framework',
+    'corsheaders',
+    'periods',
+    'grade_sheets',
+
+   
 
 ]
 
@@ -54,6 +59,13 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+     'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # React frontend
 ]
 
 ROOT_URLCONF = 'grade_system.urls'
@@ -86,6 +98,9 @@ DATABASES = {
     }
 }
 
+REST_FRAMEWORK = {
+    'DATE_INPUT_FORMATS': ['%Y-%m-%d'],  # optional, to ensure correct parsing
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

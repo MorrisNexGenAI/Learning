@@ -5,12 +5,13 @@ class Student(models.Model):
     GENDER_CHOICES = (
         ('M', 'Male'),
         ('F', 'Female'),
+        ('O', 'Other'),
     )
    
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
     gender = models.CharField(max_length =1,choices=GENDER_CHOICES)
-    date_of_birth = models.DateField()
+    dob = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
    
    
