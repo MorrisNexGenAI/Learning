@@ -1,0 +1,54 @@
+<!-- templates/gradesheet_view.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gradesheet</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>Gradesheet for {{ level_name }}</h1>
+        {% for student in gradesheet %}
+            <h2>{{ student.student_name }}</h2>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>1st</th>
+                        <th>2nd</th>
+                        <th>3rd</th>
+                        <th>1exam</th>
+                        <th>Sem1 Avg</th>
+                        <th>4th</th>
+                        <th>5th</th>
+                        <th>6th</th>
+                        <th>2exam</th>
+                        <th>Sem2 Avg</th>
+                        <th>Final Avg</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subject in student.subjects %}
+                        <tr>
+                            <td>{{ subject.subject_name }}</td>
+                            <td>{{ subject.1st|default:"-" }}</td>
+                            <td>{{ subject.2nd|default:"-" }}</td>
+                            <td>{{ subject.3rd|default:"-" }}</td>
+                            <td>{{ subject.1exam|default:"-" }}</td>
+                            <td>{{ subject.sem1_avg|default:"-" }}</td>
+                            <td>{{ subject.4th|default:"-" }}</td>
+                            <td>{{ subject.5th|default:"-" }}</td>
+                            <td>{{ subject.6th|default:"-" }}</td>
+                            <td>{{ subject.2exam|default:"-" }}</td>
+                            <td>{{ subject.sem2_avg|default:"-" }}</td>
+                            <td>{{ subject.final_avg|default:"-" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endfor %}
+        <a href="{% url 'gradesheet-home' %}" class="btn btn-primary">Back to Grade Input</a>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

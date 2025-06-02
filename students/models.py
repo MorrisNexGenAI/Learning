@@ -1,4 +1,5 @@
 from django.db import models
+from levels.models import Level
 
 # Create your models here.
 class Student(models.Model):
@@ -8,12 +9,13 @@ class Student(models.Model):
         ('O', 'Other'),
     )
    
-    first_name = models.CharField(max_length=50)
-    last_name = models.CharField(max_length=50)
+    firstName = models.CharField(max_length=50)
+    lastName = models.CharField(max_length=50)
     gender = models.CharField(max_length =1,choices=GENDER_CHOICES)
     dob = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
    
    
+   
     def __str__(self):
-        return f"{self.first_name} {self.last_name}"
+        return f"{self.firstName} {self.lastName}"

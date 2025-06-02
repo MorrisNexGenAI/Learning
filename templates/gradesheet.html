@@ -1,0 +1,83 @@
+<!-- templates/gradesheet.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gradesheet System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>Gradesheet System</h1>
+        <!-- Display Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert {% if message.tags == 'success' %}alert-success{% else %}alert-danger{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        <!-- Level Selection -->
+        <form method="GET" class="mb-4">
+            <div class="mb-3">
+                <label for="level_id" class="form-label">Select Level:</label>
+                <select name="level_id" id="level_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">Choose a level</option>
+                    {% for level in levels %}
+                        <option value="{{ level.id }}" {% if level.id == selected_level %}selected{% endif %}>{{ level.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+        <!-- Grade Input Form -->
+        {% if students %}
+            <h2>Students in {{ selected_level_name }}</h2>
+            {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+            <form method="POST" action="{% url 'input-grades' %}">
+                {% csrf_token %}
+                <input type="hidden" name="level_id" value="{{ selected_level }}">
+                <div class="mb-3">
+                    <label for="subject_id" class="form-label">Subject:</label>
+                    <select name="subject_id" id="subject_id" class="form-select" required>
+                        <option value="">Choose a subject</option>
+                        {% for subject in subjects %}
+                            <option value="{{ subject.id }}">{{ subject.subject }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="period_id" class="form-label">Period:</label>
+                    <select name="period_id" id="period_id" class="form-select" required>
+                        <option value="">Choose a period</option>
+                        {% for period in periods %}
+                            <option value="{{ period.id }}">{{ period.period }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Grade (0-100)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                            <tr>
+                                <td>{{ student.first_name }} {{ student.last_name }}</td>
+                                <td><input type="number" step="0.01" name="grades[{{ student.id }}]" min="0" max="100" class="form-control"></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <button type="submit" class="btn btn-primary">Save Grades</button>
+            </form>
+            <a href="{% url 'gradesheet' %}?level_id={{ selected_level }}" class="btn btn-secondary mt-3">View Gradesheet</a>
+        {% endif %}
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
