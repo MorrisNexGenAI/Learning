@@ -5,6 +5,7 @@ from enrollment.models import Enrollment
 from levels.models import Level
 from students.serializers import StudentSerializer
 import datetime
+from academic_years.models import AcademicYear
 
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
@@ -12,7 +13,12 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         level_id = request.query_params.get('level_id')
-        queryset = get_students_by_level(level_id) if level_id else self.queryset
+        academic_year = request.query_params.get('academic_year')
+        queryset = self.queryset
+        if level_id:
+            queryset = queryset.filter(enrollments__level_id=level_id).distinct()
+        if academic_year:
+            queryset = queryset.filter(enrollments__academic_year__name=academic_year).distinct()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -21,25 +27,27 @@ class StudentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         student = serializer.save()
-        print(f"Created student: {student.id} - {student.firstName} {student.lastName}")
 
         level_id = request.data.get('level')
-        if level_id:
+        academic_year_id = request.data.get('academic_year')
+        if level_id and academic_year_id:
             try:
                 level = Level.objects.get(id=level_id)
+                academic_year = AcademicYear.objects.get(id=academic_year_id)
                 enrollment, created = Enrollment.objects.get_or_create(
                     student=student,
                     level=level,
-                    defaults={'academic_year': str(datetime.date.today().year)}
+                    academic_year=academic_year,
+                    defaults={'date_enrolled': datetime.date.today()}
                 )
                 if created:
-                    print(f"Enrollment created for student {student.id} in level {level.id}")
+                    print(f"Enrollment created for student {student.id} in level {level.id}, academic year {academic_year.name}")
                 else:
-                    print(f"Enrollment already exists for student {student.id} in level {level.id}")
-            except Level.DoesNotExist:
-                print(f"Level {level_id} not found, skipping enrollment")
+                    print(f"Enrollment already exists for student {student.id} in level {level.id}, academic year {academic_year.name}")
+            except (Level.DoesNotExist, AcademicYear.DoesNotExist):
+                print(f"Level {level_id} or Academic Year {academic_year_id} not found, skipping enrollment")
         else:
-            print("No valid level data provided, skipping enrollment")
+            print("No valid level or academic year data provided, skipping enrollment")
 
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=self.get_success_headers(serializer.data))
 

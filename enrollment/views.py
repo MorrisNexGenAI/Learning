@@ -1,6 +1,3 @@
-from django.shortcuts import render
-
-# Create your views here.
 from rest_framework import viewsets
 from enrollment.models import Enrollment
 from enrollment.serializers import EnrollmentSerializer

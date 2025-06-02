@@ -1,4 +1,5 @@
 from django.db import models
+from academic_years.models import AcademicYear
 from levels.models import Level
 
 # Create your models here.

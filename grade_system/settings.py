@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'levels',
     'periods',
     'grade_sheets',
+    'academic_years',
 ]
 
 MIDDLEWARE = [

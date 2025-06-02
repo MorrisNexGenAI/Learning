@@ -34,52 +34,58 @@ class GradeSheetViewSet(viewsets.ViewSet):
         result = []
         for student in students:
             student_data = format_student_data(student)
+            # Initialize subjects_data with all subjects for the level
+            subjects_data = {
+                subject_id: {
+                    "subject_id": subject_id,
+                    "subject_name": subject_name,
+                    "1st": None,
+                    "2nd": None,
+                    "3rd": None,
+                    "1exam": None,
+                    "4th": None,
+                    "5th": None,
+                    "6th": None,
+                    "2exam": None,
+                    "sem1_avg": None,
+                    "sem2_avg": None,
+                    "final_avg": None
+                }
+                for subject_id, subject_name in subjects_by_id.items()
+            }
+
+            # Update with existing grades from grade_map
             for subject_id, grades in grade_map.get(student.id, {}).items():
-                subject_name = subjects_by_id.get(subject_id)
-                if subject_name:
-                    print(f"Debug: Student {student.id}, Subject ID {subject_id}, Subject Name {subject_name}, Grades: {grades}")
-                    subject_data_item = {
-                        "subject_id": subject_id,
-                        "subject_name": subject_name,
-                        "1st": grades.get("1st"),
-                        "2nd": grades.get("2nd"),
-                        "3rd": grades.get("3rd"),
-                        "1exam": grades.get("1exam"),
-                        "4th": grades.get("4th"),
-                        "5th": grades.get("5th"),
-                        "6th": grades.get("6th"),
-                        "2exam": grades.get("2exam"),
-                        "sem1_avg": None,
-                        "sem2_avg": None,
-                        "final_avg": None
-                    }
+                if subject_id in subjects_data:
+                    subjects_data[subject_id].update(grades)
 
-                    # Calculate 1st Semester Avg
-                    period1 = subject_data_item["1st"]
-                    period2 = subject_data_item["2nd"]
-                    period3 = subject_data_item["3rd"]
-                    semester_exam1 = subject_data_item["1exam"]
-                    if all(v is not None for v in [period1, period2, period3, semester_exam1]):
-                        sem1_period_avg = (period1 + period2 + period3) / 3
-                        subject_data_item["sem1_avg"] = round((sem1_period_avg + semester_exam1) / 2, 1)
+            # Calculate averages for each subject
+            for subject_data_item in subjects_data.values():
+                # Calculate 1st Semester Avg
+                period1 = subject_data_item["1st"]
+                period2 = subject_data_item["2nd"]
+                period3 = subject_data_item["3rd"]
+                semester_exam1 = subject_data_item["1exam"]
+                if all(v is not None for v in [period1, period2, period3, semester_exam1]):
+                    sem1_period_avg = (period1 + period2 + period3) / 3
+                    subject_data_item["sem1_avg"] = round((sem1_period_avg + semester_exam1) / 2, 1)
 
-                    # Calculate 2nd Semester Avg
-                    period4 = subject_data_item["4th"]
-                    period5 = subject_data_item["5th"]
-                    period6 = subject_data_item["6th"]
-                    final_exam = subject_data_item["2exam"]
-                    if all(v is not None for v in [period4, period5, period6, final_exam]):
-                        sem2_period_avg = (period4 + period5 + period6) / 3
-                        subject_data_item["sem2_avg"] = round((sem2_period_avg + final_exam) / 2, 1)
+                # Calculate 2nd Semester Avg
+                period4 = subject_data_item["4th"]
+                period5 = subject_data_item["5th"]
+                period6 = subject_data_item["6th"]
+                final_exam = subject_data_item["2exam"]
+                if all(v is not None for v in [period4, period5, period6, final_exam]):
+                    sem2_period_avg = (period4 + period5 + period6) / 3
+                    subject_data_item["sem2_avg"] = round((sem2_period_avg + final_exam) / 2, 1)
 
-                    # Calculate Final Avg
-                    sem1_avg = subject_data_item["sem1_avg"]
-                    sem2_avg = subject_data_item["sem2_avg"]
-                    if sem1_avg is not None and sem2_avg is not None:
-                        subject_data_item["final_avg"] = round((sem1_avg + sem2_avg) / 2, 1)
+                # Calculate Final Avg
+                sem1_avg = subject_data_item["sem1_avg"]
+                sem2_avg = subject_data_item["sem2_avg"]
+                if sem1_avg is not None and sem2_avg is not None:
+                    subject_data_item["final_avg"] = round((sem1_avg + sem2_avg) / 2, 1)
 
-                    print(f"Appending subject data for student {student.id}: {subject_data_item}")
-                    student_data["subjects"].append(subject_data_item)
+            student_data["subjects"] = list(subjects_data.values())
             result.append(student_data)
 
         print(f"Queried grade map for level {level_id}: {grade_map}")
@@ -313,4 +319,3 @@ def cors_test(request):
     response = HttpResponse("CORS Test Endpoint")
     response['Access-Control-Allow-Origin'] = 'http://localhost:5173'
     return response
-
