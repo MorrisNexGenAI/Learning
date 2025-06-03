@@ -1,0 +1,48 @@
+% C:\Users\USER\Desktop\GradeSheet\GradeSheetPython\schools_templates\bomi-junior-high\pdf_templates\gradesheet.tex
+\documentclass[a4paper,12pt]{article}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\definecolor{bomigreen}{RGB}{0,128,0} % Green secondary color
+
+\begin{document}
+
+% Header
+\begin{center}
+    \includegraphics[width=2cm]{logo_path} % Use dynamic path
+    \vspace{0.2cm}
+    \textbf{\Large Bomi Junior High School} \\
+    \vspace{0.2cm}
+    \textbf{Grade Sheet} \\
+    \vspace{0.2cm}
+    Student: \textbf{student_name} \\
+    Level: \textbf{level_id}
+\end{center}
+
+\vspace{1cm}
+
+% Grade Table
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lcccccccccc}
+        \toprule
+        \rowcolor{bomigreen!20}
+        \textbf{Subject} & \textbf{1st} & \textbf{2nd} & \textbf{3rd} & \textbf{1st Exam} & \textbf{Sem 1 Avg} & \textbf{4th} & \textbf{5th} & \textbf{6th} & \textbf{Final Exam} & \textbf{Final Avg} \\
+        \midrule
+        {% for subject in subjects %}
+            \subject.name & \subject.grades.1st & \subject.grades.2nd & \subject.grades.3rd & \subject.grades.1exam & \subject.grades.sem1_avg & \subject.grades.4th & \subject.grades.5th & \subject.grades.6th & \subject.grades.2exam & \subject.grades.final_avg \\
+        {% endfor %}
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+% Footer
+\vspace{1cm}
+\begin{center}
+    \color{bomigreen}
+    Bomi Junior High School © 2025 All Rights Reserved
+\end{center}
+
+\end{document}

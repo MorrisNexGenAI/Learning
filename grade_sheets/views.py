@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
-
+from schools_templates.bomi_junior_high.pdf_generator import generate_gradesheet_pdf 
 # Import functions from other apps
 from students.views import get_students_by_level, format_student_data, format_student_name
 from levels.views import get_level_by_id, get_all_levels
@@ -314,6 +314,18 @@ def input_grades_view(request):
         return redirect(f"{reverse('gradesheet-home')}?level_id={level_id}")
     
     return redirect(reverse('gradesheet-home'))
+
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+
+@action(detail=False, methods=['get'], url_path='gradesheet/pdf')
+def generate_gradesheet_pdf_view(self, request):
+    student_id = request.query_params.get('student_id')
+    level_id = request.query_params.get('level_id')
+    if not student_id or not level_id:
+        return Response({"error": "student_id and level_id are required"}, status=status.HTTP_400_BAD_REQUEST)
+    return generate_gradesheet_pdf(student_id, level_id)
 
 def cors_test(request):
     response = HttpResponse("CORS Test Endpoint")
