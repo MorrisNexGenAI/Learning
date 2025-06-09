@@ -20,6 +20,15 @@ from grades.models import Grade
 from grades.serializers import GradeSerializer
 import os
 import logging
+from rest_framework.response import Response
+from .periodic_utils import generate_periodic_gradesheet_pdf
+from .yearly_utils import generate_yearly_gradesheet_pdf
+from rest_framework.views import APIView
+from django.http import FileResponse
+from grade_sheets.periodic_utils import generate_periodic_gradesheet_pdf
+from grade_sheets.yearly_utils import generate_yearly_gradesheet_pdf
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -389,6 +398,40 @@ def input_grades_view(request):
         return redirect(f"{reverse('gradesheet-home')}?level_id={level_id}")
     
     return redirect(reverse('gradesheet-home'))
+
+
+class ReportCardPrintView(APIView):
+    def post(self, request):
+        level_id = request.data.get("level_id")
+        student_id = request.data.get("student_id")
+        card_type = request.data.get("card_type")
+        pass_template = request.data.get("pass_template", True)
+
+        if not level_id:
+            return Response({"error": "level_id is required"}, status=400)
+
+        try:
+            if card_type == "periodic":
+                pdf_paths = generate_periodic_gradesheet_pdf(level_id, student_id)
+            elif card_type == "yearly":
+                pdf_paths = generate_yearly_gradesheet_pdf(level_id, student_id, pass_template)
+            else:
+                return Response({"error": "Invalid card_type"}, status=400)
+
+            if not pdf_paths:
+                return Response({"error": "No PDFs generated"}, status=404)
+
+            pdf_path = pdf_paths[0]
+            if os.path.exists(pdf_path):
+                with open(pdf_path, "rb") as f:
+                    response = FileResponse(f, content_type="application/pdf")
+                    response['Content-Disposition'] = f'attachment; filename="{os.path.basename(pdf_path)}"'
+                    return response
+            else:
+                return Response({"pdf_paths": pdf_paths})
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
 
 def cors_test(request):
     response = HttpResponse("CORS Test Endpoint")

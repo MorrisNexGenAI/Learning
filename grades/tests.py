@@ -34,3 +34,4 @@ for level_id in range(1, 10):
         else:
             print(f"Subject {subject_name} already exists for level {level_id}")
 print("Subjects reset successfully with IDs 1-9 per level.")
+

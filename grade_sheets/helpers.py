@@ -23,31 +23,31 @@ def get_grade_sheet_data(student_id, level_id):
             for grade in grades.filter(subject_id=subject.id):
                 logger.debug(f"Mapping grade: enrollment_id={grade.enrollment_id}, subject_id={grade.subject_id}, period={grade.period.period}, score={grade.score}")
                 period_map = {
-                    '1st': '1st',
-                    '2nd': '2nd',
-                    '3rd': '3rd',
-                    '1exam': '1se',
-                    '4th': '4th',
-                    '5th': '5th',
-                    '6th': '6th',
-                    '2exam': '2se'
+                    '1st': '1',
+                    '2nd': '2',
+                    '3rd': '3',
+                    '1exam': '1s',
+                    '4th': '4',
+                    '5th': '5',
+                    '6th': '6',
+                    '2exam': '2s'
                 }
                 subject_grades[period_map.get(grade.period.period, grade.period.period)] = float(grade.score) if grade.score is not None else '-'
 
             data = {
                 "id": subject.id,
                 "sn": subject.subject,
-                "1st": subject_grades.get("1st", "-"),
-                "2nd": subject_grades.get("2nd", "-"),
-                "3rd": subject_grades.get("3rd", "-"),
-                "1se": subject_grades.get("1se", "-"),
-                "4th": subject_grades.get("4th", "-"),
-                "5th": subject_grades.get("5th", "-"),
-                "6th": subject_grades.get("6th", "-"),
-                "2se": subject_grades.get("2se", "-"),
-                "1sa": "-",
-                "2sa": "-",
-                "fa": "-"
+                "1": subject_grades.get("1", ""),
+                "2": subject_grades.get("2", ""),
+                "3": subject_grades.get("3", ""),
+                "1s": subject_grades.get("1s", ""),
+                "4": subject_grades.get("4", ""),
+                "5": subject_grades.get("5", ""),
+                "6": subject_grades.get("6", ""),
+                "2s": subject_grades.get("2s", ""),
+                "1a": "",
+                "2a": "",
+                "f": ""
             }
             subject_data.append(data)
 
@@ -60,3 +60,4 @@ def get_grade_sheet_data(student_id, level_id):
     except Exception as e:
         logger.error(f"Error generating grade sheet data: {str(e)}")
         raise
+
