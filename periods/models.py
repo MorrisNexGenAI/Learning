@@ -22,3 +22,5 @@ class Period(models.Model):
 
     def __str__(self):
         return self.get_period_display()
+
+        
