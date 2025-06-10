@@ -13,3 +13,4 @@ template = DocxTemplate(template_path)
 template.render(student_data)
 template.save(output_docx)
 print(f"Rendered .docx saved to {output_docx}")
+

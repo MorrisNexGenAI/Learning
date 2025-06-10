@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'periods',
     'grade_sheets',
     'academic_years',
+    'pass_and_failed',
 ]
 
 MIDDLEWARE = [
