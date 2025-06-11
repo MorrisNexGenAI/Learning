@@ -7,10 +7,17 @@ import datetime
 
 
 class Enrollment(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='enrollments')
-    level = models.ForeignKey(Level, on_delete=models.CASCADE)
-    academic_year = models.ForeignKey('academic_years.AcademicYear', on_delete=models.SET_NULL, null=True)
-    date_enrolled = models.DateField(default=datetime.date.today)
+    STATUS_CHOICES = [
+        ('pass', 'Pass'),
+        ('failed', 'Failed'),
+        ('conditional', 'Pass Under Condition'),
+        ('none', 'None'),
+    ]
+    student = models.ForeignKey('students.Student', on_delete=models.CASCADE, related_name="enrollment")
+    level = models.ForeignKey('levels.Level', on_delete=models.CASCADE)
+    academic_year = models.ForeignKey('academic_years.AcademicYear', on_delete=models.CASCADE)
+    date_enrolled = models.DateField()
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='none')
 
     class Meta:
         unique_together = ('student', 'level')

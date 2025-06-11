@@ -1,6 +1,3 @@
-from django.shortcuts import render
-
-# Create your views here.
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -11,6 +8,9 @@ from grade_sheets.yearly_utils import generate_yearly_gradesheet_pdf
 from students.models import Student
 from enrollment.models import Enrollment
 import logging
+import datetime
+import os
+from django.http import FileResponse
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,10 @@ class PassFailedStatusViewSet(viewsets.ModelViewSet):
         if not level_id or not academic_year_id:
             return Response({"error": "level_id and academic_year_id are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Get all students in the level and academic year
+        logger.info(f"Fetching PassFailedStatus for level_id={level_id}, academic_year_id={academic_year_id}")
         enrollments = Enrollment.objects.filter(level_id=level_id, academic_year_id=academic_year_id).select_related('student')
+        logger.info(f"Found {enrollments.count()} enrollments")
+
         result = []
         for enrollment in enrollments:
             student = enrollment.student
@@ -44,20 +46,26 @@ class PassFailedStatusViewSet(viewsets.ModelViewSet):
                 student=student,
                 level_id=level_id,
                 academic_year_id=academic_year_id,
-                defaults={'enrollment': enrollment}
+                defaults={'enrollment': enrollment, 'status': 'INCOMPLETE', 'grades_complete': False}
             )
+            if created:
+                logger.info(f"Created PassFailedStatus for student_id={student.id}")
             is_complete, message = validate_student_grades(student.id, level_id, academic_year_id)
             if not is_complete and status_obj.status == 'INCOMPLETE':
                 status_obj.status = 'INCOMPLETE'
+                status_obj.grades_complete = False
                 status_obj.save()
             result.append({
+                'id': status_obj.id,
                 'student_id': student.id,
                 'student_name': f"{student.firstName} {student.lastName}",
                 'status': status_obj.status,
                 'is_complete': is_complete,
                 'validation_message': message,
-                'can_print': status_obj.status != 'INCOMPLETE'
+                'can_print': status_obj.status != 'INCOMPLETE',
+                'grades_complete': status_obj.grades_complete
             })
+        logger.info(f"Returning {len(result)} PassFailedStatus records")
         return Response(result)
 
     @action(detail=True, methods=['post'], url_path='validate')
@@ -73,6 +81,7 @@ class PassFailedStatusViewSet(viewsets.ModelViewSet):
         status_obj.status = new_status
         status_obj.validated_at = datetime.datetime.now()
         status_obj.validated_by = validated_by
+        status_obj.grades_complete = True
         status_obj.save()
         serializer = self.get_serializer(status_obj)
         return Response(serializer.data)
@@ -96,31 +105,29 @@ class ReportCardPrintView(viewsets.ViewSet):
 
         try:
             if student_id:
-                # Single student
                 status_obj = PassFailedStatus.objects.get(
                     student_id=student_id, level_id=level_id, academic_year_id=academic_year_id
                 )
                 if status_obj.status == 'INCOMPLETE':
                     return Response({"error": "Student is incomplete, cannot print report card"}, status=status.HTTP_400_BAD_REQUEST)
-                pdf_paths = generate_yearly_gradesheet_pdf(level_id, student_id, status_obj.template_name)
+                template_name = f"yearly_card_{status_obj.status.lower()}.docx"
+                pdf_paths = generate_yearly_gradesheet_pdf(level_id, student_id, template_name)
             else:
-                # By level
                 statuses = PassFailedStatus.objects.filter(level_id=level_id, academic_year_id=academic_year_id)
                 if any(s.status == 'INCOMPLETE' for s in statuses):
                     return Response({"error": "Not all students are validated, cannot print level report card"}, status=status.HTTP_400_BAD_REQUEST)
-                pdf_paths = generate_yearly_gradesheet_pdf(level_id, None, 'yearly_card_pass.docx')  # Default template, overridden per student
+                pdf_paths = []
+                for status in statuses:
+                    template_name = f"yearly_card_{status.status.lower()}.docx"
+                    pdf_paths.extend(generate_yearly_gradesheet_pdf(level_id, status.student.id, template_name))
 
             if not pdf_paths:
+                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}")
                 return Response({"error": "No PDFs generated"}, status=status.HTTP_404_NOT_FOUND)
 
             pdf_path = pdf_paths[0]
-            if os.path.exists(pdf_path):
-                with open(pdf_path, 'rb') as f:
-                    response = FileResponse(f, content_type='application/pdf')
-                    response['Content-Disposition'] = f'attachment; filename="{os.path.basename(pdf_path)}"'
-                    return response
-            else:
-                return Response({"pdf_paths": pdf_paths})
+            view_url = f"/api/pass_failed_statuses/print/view?file={os.path.basename(pdf_path)}"
+            return Response({"view_url": view_url})
         except PassFailedStatus.DoesNotExist:
             return Response({"error": "Student status not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:

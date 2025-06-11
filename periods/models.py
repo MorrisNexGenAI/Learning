@@ -1,7 +1,7 @@
 from django.db import models
 
 class Period(models.Model):
-    PERIOD_CHOICES = [
+    PERIOD_CHOICES = (
         ('1st', '1st Period'),
         ('2nd', '2nd Period'),
         ('3rd', '3rd Period'),
@@ -10,7 +10,7 @@ class Period(models.Model):
         ('5th', '5th Period'),
         ('6th', '6th Period'),
         ('2exam', 'Second Semester Exam'),
-    ]
+    )
 
     period = models.CharField(
         max_length=10,
@@ -18,6 +18,7 @@ class Period(models.Model):
         unique=True,
         default='1st'  # Set a valid default value
     )
+    is_exam = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

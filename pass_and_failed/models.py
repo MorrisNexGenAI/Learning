@@ -23,6 +23,8 @@ class PassFailedStatus(models.Model):
     validated_at = models.DateTimeField(null=True, blank=True)
     validated_by = models.CharField(max_length=100, null=True, blank=True)  # E.g., teacher name
     template_name = models.CharField(max_length=100, blank=True)  # E.g., 'yearly_card_pass.docx'
+    grades_complete= models.BooleanField(default=False)
+    
 
     class Meta:
         unique_together = ('student', 'level', 'academic_year')

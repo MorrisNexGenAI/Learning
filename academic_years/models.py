@@ -1,10 +1,18 @@
 from django.db import models
 
-# Create your models here.
-from django.db import models
-
 class AcademicYear(models.Model):
-    name = models.CharField(max_length=9, unique=True)  # e.g., "2024/2025"
+    ACADEMIC_CHOICE = (
+        ('2024/2025', '2024/2025'),
+        ('2025/2026', '2025/2026'),
+        ('2026/2027', '2026/2027'),
+        ('2027/2028', '2027/2028'),
+    )
+    name = models.CharField(
+        max_length=9,  # Adjusted max_length to fit the academic year format
+        choices=ACADEMIC_CHOICE,
+        unique=True,
+        default='2024/2025'  # Set a valid default value
+    )
     start_date = models.DateField()
     end_date = models.DateField()
 

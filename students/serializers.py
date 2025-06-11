@@ -14,13 +14,13 @@ class StudentSerializer(serializers.ModelSerializer):
         fields = ['id', 'firstName', 'lastName', 'gender', 'dob', 'level', 'academic_year']
 
     def get_level(self, obj):
-        enrollment = obj.enrollments.first()
+        enrollment = obj.enrollment.first()
         if enrollment and enrollment.level:
             return LevelSerializer(enrollment.level).data
         return None
 
     def get_academic_year(self, obj):
-        enrollment = obj.enrollments.first()
+        enrollment = obj.enrollment.first()
         if enrollment and enrollment.academic_year:
             return {'id': enrollment.academic_year.id, 'name': enrollment.academic_year.name}
         return None

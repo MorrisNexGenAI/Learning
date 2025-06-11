@@ -16,9 +16,9 @@ class StudentViewSet(viewsets.ModelViewSet):
         academic_year = request.query_params.get('academic_year')
         queryset = self.queryset
         if level_id:
-            queryset = queryset.filter(enrollments__level_id=level_id).distinct()
+            queryset = queryset.filter(enrollment__level_id=level_id).distinct()
         if academic_year:
-            queryset = queryset.filter(enrollments__academic_year__name=academic_year).distinct()
+            queryset = queryset.filter(enrollment__academic_year__name=academic_year).distinct()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -53,7 +53,7 @@ class StudentViewSet(viewsets.ModelViewSet):
 
 def get_students_by_level(level_id):
     """Fetch students by level ID."""
-    return Student.objects.filter(enrollments__level_id=level_id).distinct()
+    return Student.objects.filter(enrollment__level_id=level_id).distinct()
 
 def format_student_data(student):
     """Helper to format student data for grade sheets."""

@@ -22,8 +22,13 @@ def load_data():
     
     # Step 1: Create Period records
     period_mapping = {
-        1: '1st',  # period_id=1 maps to period='1st'
-        3: '3rd'   # period_id=3 maps to period='3rd'
+        1: '1st',
+        2: '2nd',  # period_id=1 maps to period='1st'
+        3: '3rd',
+        4:'1exam',
+        5:'4th',
+        6:'5th',
+        7:'2exam'  # period_id=3 maps to period='3rd'
     }
     for period_id, period_value in period_mapping.items():
         period, created = Period.objects.get_or_create(
