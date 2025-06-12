@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Period
+from .models import GradeSheet
 
 class GradeSheetserializer(serializers.ModelSerializer):
     class Meta:

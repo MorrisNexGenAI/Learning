@@ -20,15 +20,9 @@ from grades.models import Grade
 from grades.serializers import GradeSerializer
 import os
 import logging
-from rest_framework.response import Response
 from .periodic_utils import generate_periodic_gradesheet_pdf
 from .yearly_utils import generate_yearly_gradesheet_pdf
 from rest_framework.views import APIView
-from django.http import FileResponse
-from grade_sheets.periodic_utils import generate_periodic_gradesheet_pdf
-from grade_sheets.yearly_utils import generate_yearly_gradesheet_pdf
-
-
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +30,13 @@ class GradeSheetViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='by_level')
     def list_by_level(self, request):
         level_id = request.query_params.get('level_id')
+        academic_year = request.query_params.get('academic_year')
         if not level_id:
             return Response({"error": "Level ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-  
+
         students = get_students_by_level(level_id)
+        if academic_year:
+            students = students.filter(enrollment__academic_year__name=academic_year).distinct()
         grade_map = get_grade_map(level_id)
         subjects_by_id = get_subjects_by_level(level_id)
         print(f"Subjects for level {level_id} (by ID): {subjects_by_id}")
@@ -103,18 +100,25 @@ class GradeSheetViewSet(viewsets.ViewSet):
     def generate_gradesheet_pdf(self, request):
         level_id = request.query_params.get('level_id')
         student_id = request.query_params.get('student_id')
+        academic_year = request.query_params.get('academic_year')
         try:
             if not level_id:
                 return Response({"error": "level_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-            pdf_paths = generate_gradesheet_pdf(level_id=int(level_id), student_id=int(student_id) if student_id else None)
+            pdf_paths = generate_gradesheet_pdf(
+                level_id=int(level_id),
+                student_id=int(student_id) if student_id else None,
+                academic_year=academic_year
+            )
             if not pdf_paths:
-                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}")
+                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year={academic_year}")
                 return Response({"error": "No PDFs generated"}, status=status.HTTP_404_NOT_FOUND)
             pdf_path = pdf_paths[0]
             logger.info(f"Generated PDF: {pdf_path}")
             view_url = f"/api/grade_sheets/gradesheet/pdf/view?level_id={level_id}"
             if student_id:
                 view_url += f"&student_id={student_id}"
+            if academic_year:
+                view_url += f"&academic_year={academic_year}"
             return Response({"message": "PDF generated successfully", "view_url": view_url})
         except Exception as e:
             logger.error(f"Error generating PDF: {str(e)}")
@@ -124,10 +128,14 @@ class GradeSheetViewSet(viewsets.ViewSet):
     def view_gradesheet_pdf(self, request):
         level_id = request.query_params.get('level_id')
         student_id = request.query_params.get('student_id')
+        academic_year = request.query_params.get('academic_year')
         try:
             if not level_id:
                 return Response({"error": "level_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-            filename = f"report_card_level_{level_id}.pdf" if not student_id else f"report_card_student_{student_id}.pdf"
+            filename = f"report_card_level_{level_id}_{academic_year}.pdf" if academic_year and not student_id else \
+                       f"report_card_student_{student_id}_{academic_year}.pdf" if academic_year and student_id else \
+                       f"report_card_level_{level_id}.pdf" if not student_id else \
+                       f"report_card_student_{student_id}.pdf"
             pdf_path = os.path.join(settings.BASE_DIR, "output_gradesheets", filename)
             if not os.path.exists(pdf_path):
                 logger.warning(f"PDF not found: {pdf_path}")
@@ -145,12 +153,17 @@ class GradeSheetViewSet(viewsets.ViewSet):
     def generate_gradesheet_pdf_view(self, request):
         level_id = request.query_params.get('level_id')
         student_id = request.query_params.get('student_id')
+        academic_year = request.query_params.get('academic_year')
         try:
             if not level_id:
                 return Response({"error": "level_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-            pdf_paths = generate_gradesheet_pdf(level_id=int(level_id), student_id=int(student_id) if student_id else None)
+            pdf_paths = generate_gradesheet_pdf(
+                level_id=int(level_id),
+                student_id=int(student_id) if student_id else None,
+                academic_year=academic_year
+            )
             if not pdf_paths:
-                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}")
+                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year={academic_year}")
                 return Response({"error": "No PDFs generated"}, status=status.HTTP_404_NOT_FOUND)
             pdf_path = pdf_paths[0]
             logger.info(f"Serving PDF: {pdf_path}")
@@ -169,17 +182,21 @@ class GradeSheetViewSet(viewsets.ViewSet):
         subject_id = request.data.get('subject_id')
         period_id = request.data.get('period_id')
         grades = request.data.get('grades')
+        academic_year = request.data.get('academic_year')
 
-        print(f"Received data: level_id={level_id}, subject_id={subject_id}, period_id={period_id}, grades={grades}")
+        print(f"Received data: level_id={level_id}, subject_id={subject_id}, period_id={period_id}, grades={grades}, academic_year={academic_year}")
 
-        if not all([level_id, subject_id, period_id]) or not isinstance(grades, list):
-            response_data = {"error": "Missing or invalid required fields."}
+        if not all([level_id, subject_id, period_id, academic_year]) or not isinstance(grades, list):
+            response_data = {"error": "Missing or invalid required fields, including academic_year."}
             print(f"Returning error: {response_data}")
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            from academic_years.models import AcademicYear
+            academic_year_obj = AcademicYear.objects.get(name=academic_year)
             existing_grades = Grade.objects.filter(
                 enrollment__level_id=level_id,
+                enrollment__academic_year=academic_year_obj,
                 subject_id=subject_id,
                 period_id=period_id
             ).values_list('enrollment__student_id', flat=True)
@@ -196,9 +213,9 @@ class GradeSheetViewSet(viewsets.ViewSet):
                     errors.append({"student_id": student_id, "error": "Missing student_id or score"})
                     continue
 
-                enrollment = get_enrollment_by_student_level(student_id, level_id)
+                enrollment = get_enrollment_by_student_level(student_id, level_id, academic_year_obj.id)
                 if not enrollment:
-                    print(f"No enrollment found for student_id={student_id}, level_id={level_id}")
+                    print(f"No enrollment found for student_id={student_id}, level_id={level_id}, academic_year={academic_year}")
                     skipped_students.append(student_id)
                     continue
 
@@ -242,15 +259,20 @@ class GradeSheetViewSet(viewsets.ViewSet):
         level_id = request.query_params.get('level_id')
         subject_id = request.query_params.get('subject_id')
         period_id = request.query_params.get('period_id')
+        academic_year = request.query_params.get('academic_year')
 
         if not all([level_id, subject_id, period_id]):
             return Response({"error": "Missing required parameters."}, status=status.HTTP_400_BAD_REQUEST)
 
+        from academic_years.models import AcademicYear
         grades = Grade.objects.filter(
             enrollment__level_id=level_id,
             subject_id=subject_id,
             period_id=period_id
         ).select_related('enrollment__student')
+        if academic_year:
+            academic_year_obj = AcademicYear.objects.get(name=academic_year)
+            grades = grades.filter(enrollment__academic_year=academic_year_obj)
 
         result = [
             {
@@ -266,10 +288,13 @@ class GradeSheetViewSet(viewsets.ViewSet):
     def check_enrollment(self, request):
         student_id = request.query_params.get('student_id')
         level_id = request.query_params.get('level_id')
+        academic_year = request.query_params.get('academic_year')
         if not all([student_id, level_id]):
             return Response({"error": "student_id and level_id are required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        enrollment = get_enrollment_by_student_level(student_id, level_id)
+
+        from academic_years.models import AcademicYear
+        academic_year_obj = AcademicYear.objects.get(name=academic_year) if academic_year else None
+        enrollment = get_enrollment_by_student_level(student_id, level_id, academic_year_obj.id if academic_year_obj else None)
         if not enrollment:
             return Response({"enrolled": False}, status=status.HTTP_200_OK)
         return Response({"enrolled": True, "enrollment_id": enrollment.id}, status=status.HTTP_200_OK)
@@ -311,24 +336,29 @@ def gradesheet_home(request):
 
 def gradesheet_view(request):
     level_id = request.GET.get('level_id')
+    academic_year = request.GET.get('academic_year')
     if not level_id:
         return redirect(reverse('gradesheet-home'))
-    
+
     viewset = GradeSheetViewSet()
     factory = APIRequestFactory()
-    http_request = factory.get('/api/grade_sheets/by_level/', {'level_id': level_id})
+    params = {'level_id': level_id}
+    if academic_year:
+        params['academic_year'] = academic_year
+    http_request = factory.get('/api/grade_sheets/by_level/', params)
     rest_request = Request(http_request)
-    
+
     response = viewset.list_by_level(rest_request)
     if response.status_code != 200:
         return redirect(reverse('gradesheet-home'))
-    
+
     level = get_level_by_id(level_id)
     level_name = level.name if level else "Unknown Level"
     return render(request, 'gradesheet_view.html', {
         'gradesheet': response.data,
         'level_name': level_name,
-        'level_id': level_id
+        'level_id': level_id,
+        'academic_year': academic_year
     })
 
 @csrf_exempt
@@ -337,8 +367,9 @@ def input_grades_view(request):
         level_id = request.POST.get('level_id')
         subject_id = request.POST.get('subject_id')
         period_id = request.POST.get('period_id')
+        academic_year = request.POST.get('academic_year')
         grades = []
-        
+
         for key, score in request.POST.items():
             if key.startswith('grades'):
                 student_id = key.split('[')[1].split(']')[0]
@@ -349,8 +380,8 @@ def input_grades_view(request):
                     except ValueError:
                         messages.error(request, f"Invalid score for student ID {student_id}")
                         continue
-        
-        if not all([level_id, subject_id, grades]):
+
+        if not all([level_id, subject_id, academic_year, grades]):
             messages.error(request, "Missing required fields")
             return render(request, 'gradesheet.html', {
                 'levels': get_all_levels(),
@@ -361,7 +392,22 @@ def input_grades_view(request):
                 'selected_level_name': get_level_by_id(level_id).name if get_level_by_id(level_id) else None,
                 'error': "Missing required fields"
             })
-        
+
+        from academic_years.models import AcademicYear
+        try:
+            academic_year_obj = AcademicYear.objects.get(name=academic_year)
+        except AcademicYear.DoesNotExist:
+            messages.error(request, f"Invalid academic year: {academic_year}")
+            return render(request, 'gradesheet.html', {
+                'levels': get_all_levels(),
+                'students': get_students_by_level(level_id),
+                'subjects': get_subjects_by_level(level_id),
+                'periods': get_all_periods(),
+                'selected_level': level_id,
+                'selected_level_name': get_level_by_id(level_id).name if get_level_by_id(level_id) else None,
+                'error': f"Invalid academic year: {academic_year}"
+            })
+
         saved_grades = []
         skipped_students = []
         errors = []
@@ -369,18 +415,18 @@ def input_grades_view(request):
         for grade_data in grades:
             student_id = grade_data['student_id']
             score = grade_data['score']
-            
-            enrollment = get_enrollment_by_student_level(student_id, level_id)
+
+            enrollment = get_enrollment_by_student_level(student_id, level_id, academic_year_obj.id)
             if not enrollment:
                 skipped_students.append(student_id)
                 continue
-            
+
             grade, result = save_grade(enrollment, subject_id, period_id, score, request)
             if grade:
                 saved_grades.append(grade.id)
             else:
                 errors.append(f"Student ID {student_id}: {result}")
-        
+
         if errors:
             messages.error(request, f"Some grades failed: {', '.join(errors)}")
             return render(request, 'gradesheet.html', {
@@ -392,13 +438,12 @@ def input_grades_view(request):
                 'selected_level_name': get_level_by_id(level_id).name if get_level_by_id(level_id) else None,
                 'error': ", ".join(errors)
             })
-        
+
         logging.info(f"Successfully saved {len(saved_grades)} grades")
         messages.success(request, f"Grades saved successfully for {len(saved_grades)} students")
-        return redirect(f"{reverse('gradesheet-home')}?level_id={level_id}")
-    
-    return redirect(reverse('gradesheet-home'))
+        return redirect(f"{reverse('gradesheet-home')}?level_id={level_id}&academic_year={academic_year}")
 
+    return redirect(reverse('gradesheet-home'))
 
 class ReportCardPrintView(APIView):
     def post(self, request):
@@ -406,15 +451,16 @@ class ReportCardPrintView(APIView):
         student_id = request.data.get("student_id")
         card_type = request.data.get("card_type")
         pass_template = request.data.get("pass_template", True)
+        academic_year = request.data.get("academic_year")
 
         if not level_id:
             return Response({"error": "level_id is required"}, status=400)
 
         try:
             if card_type == "periodic":
-                pdf_paths = generate_periodic_gradesheet_pdf(level_id, student_id)
+                pdf_paths = generate_periodic_gradesheet_pdf(level_id, student_id, academic_year=academic_year)
             elif card_type == "yearly":
-                pdf_paths = generate_yearly_gradesheet_pdf(level_id, student_id, pass_template)
+                pdf_paths = generate_yearly_gradesheet_pdf(level_id, student_id, pass_template, academic_year=academic_year)
             else:
                 return Response({"error": "Invalid card_type"}, status=400)
 

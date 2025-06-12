@@ -19,7 +19,7 @@ TEMPLATE_PATH = os.path.join(settings.MEDIA_ROOT, "templates", "report_card_comp
 OUTPUT_DIR = os.path.join(settings.MEDIA_ROOT, "output_gradesheets")
 
 
-def generate_gradesheet_pdf(level_id, student_id=None):
+def generate_gradesheet_pdf(level_id, student_id=None, academic_year=None):
     """
     Generate individual report card PDFs for students in the given level_id or a single student_id.
     Returns a list of generated PDF paths or a single merged PDF path for bulk printing.
@@ -45,7 +45,7 @@ def generate_gradesheet_pdf(level_id, student_id=None):
         if student_id:
             logger.debug(f"Querying single student: {student_id}")
             student = Student.objects.get(id=student_id)
-            enrollments = Enrollment.objects.filter(student_id=student_id, level_id=level_id)
+            enrollments = Enrollment.objects.filter(student_id=student_id, level_id=level_id, academic_year=academic_year)
             students = [student] if enrollments.exists() else []
         else:
             logger.debug(f"Querying all students for level: {level_id}")
@@ -53,13 +53,13 @@ def generate_gradesheet_pdf(level_id, student_id=None):
             students = [enrollment.student for enrollment in enrollments]
 
         if not students:
-            logger.warning(f"No students found for level_id: {level_id}, student_id: {student_id}")
+            logger.warning(f"No students found for level_id: {level_id}, student_id: {student_id}, academic_year:{academic_year}")
             return pdf_paths
 
         # Generate PDF for each student
         for student in students:
             logger.debug(f"Processing student: {student.id}")
-            student_data = get_grade_sheet_data(student.id, level_id)
+            student_data = get_grade_sheet_data(student.id, level_id, academic_year)
             logger.info(f"Prepared data for student: {student_data['name']}, data: {student_data}")
 
             # Generate .docx and PDF
