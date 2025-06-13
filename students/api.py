@@ -1,4 +1,4 @@
-from django.urls import path, include
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 from students.views import StudentViewSet
 from levels.views import LevelViewSet
@@ -8,7 +8,8 @@ from periods.views import PeriodViewSet
 from enrollment.views import EnrollmentViewSet
 from grade_sheets.views import GradeSheetViewSet
 from academic_years.views import AcademicYearViewSet
-from pass_and_failed.views import PassFailedStatusViewSet, ReportCardPrintView
+from pass_and_failed.views import PassFailedStatusViewSet
+from grade_sheets.views import ReportCardPrintView
 
 router = DefaultRouter()
 router.register(r'students', StudentViewSet)
@@ -22,6 +23,5 @@ router.register(r'academic_years', AcademicYearViewSet, basename='academic_year'
 router.register(r'pass_failed_statuses', PassFailedStatusViewSet, basename='pass_failed_status')
 
 urlpatterns = [
-    path('api/', include(router.urls)),
-    path('api/grade_sheets/report_card/print/', ReportCardPrintView.as_view(), name='report-card-print'),
-]
+    path('grade_sheets/report_card/print/', ReportCardPrintView.as_view(), name='report-card-print'),
+] + router.urls

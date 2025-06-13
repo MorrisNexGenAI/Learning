@@ -2,18 +2,27 @@ from django.db.models import Q
 from students.models import Student
 from subjects.models import Subject
 from grades.models import Grade
+from enrollment.models import Enrollment
 import logging
 
 logger = logging.getLogger(__name__)
 
-def get_grade_sheet_data(student_id, level_id):
-    logger.debug(f"Fetching grade sheet data for student_id={student_id}, level_id={level_id}")
+def get_grade_sheet_data(student_id, level_id, academic_year=None):
+    logger.debug(f"Fetching grade sheet data for student_id={student_id}, level_id={level_id}, academic_year={academic_year}")
     try:
         student = Student.objects.get(id=student_id)
         subjects = Subject.objects.filter(level_id=level_id)
-        grades = Grade.objects.filter(
-            Q(enrollment__student__id=student_id) & Q(subject__level_id=level_id)
-        ).select_related('subject', 'enrollment', 'period')
+        
+        # Filter grades by enrollment, level, and academic year
+        grade_query = Grade.objects.filter(
+            Q(enrollment__student__id=student_id) & 
+            Q(subject__level_id=level_id)
+        )
+        
+        if academic_year:
+            grade_query = grade_query.filter(enrollment__academic_year__name=academic_year)
+        
+        grades = grade_query.select_related('subject', 'enrollment', 'period')
 
         logger.debug(f"Raw grades query for level {level_id}: {list(grades)}")
 
@@ -60,4 +69,3 @@ def get_grade_sheet_data(student_id, level_id):
     except Exception as e:
         logger.error(f"Error generating grade sheet data: {str(e)}")
         raise
-

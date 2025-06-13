@@ -9,6 +9,7 @@ class Grade(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
     period = models.ForeignKey(Period, on_delete=models.CASCADE)
     score = models.FloatField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('enrollment', 'subject', 'period')

@@ -2,6 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from grades.models import Grade
 from grades.serializers import GradeSerializer
+from subjects.models import Subject
+from periods.models import Period
+from django.core.exceptions import ValidationError
+from enrollment.models import Enrollment
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GradeViewSet(viewsets.ModelViewSet):
     queryset = Grade.objects.all()
@@ -80,22 +87,40 @@ def calc_final_avg(sem1_avg, sem2_avg):
         return None
     return round((sem1_avg + sem2_avg) / 2, 2)
 
-def save_grade(enrollment, subject_id, period_id, score, request):
-    """Save or update a grade."""
-    serializer = GradeSerializer(data={
-        'enrollment': enrollment.id,
-        'subject': subject_id,
-        'period': period_id,
-        'score': score
-    }, context={'request': request})
-    if serializer.is_valid():
+def save_grade(enrollment: Enrollment, subject_id: int, period_id: int, score: float, request) -> tuple:
+    """Save or update a grade with validation."""
+    if not period_id:
+        logger.error(f"Period ID is null for enrollment_id={enrollment.id}, subject_id={subject_id}")
+        return None, {"period": ["This field may not be null."]}
+    
+    try:
+        period = Period.objects.get(id=period_id)
+    except Period.DoesNotExist:
+        logger.error(f"Invalid period_id={period_id}")
+        return None, {"period_id": ["Invalid period ID."]}
+    
+    try:
+        subject = Subject.objects.get(id=subject_id)
+    except Subject.DoesNotExist:
+        logger.error(f"Invalid subject_id={subject_id}")
+        return None, {"subject_id": ["Invalid subject ID."]}
+    
+    try:
+        if not (0 <= score <= 100):
+            logger.error(f"Invalid score={score} for enrollment_id={enrollment.id}, subject_id={subject_id}, period_id={period_id}")
+            return None, {"score": ["Score must be between 0 and 100."]}
+        
         grade, created = Grade.objects.update_or_create(
             enrollment=enrollment,
-            subject_id=subject_id,
-            period_id=period_id,
-            defaults={'score': serializer.validated_data['score']}
+            subject=subject,
+            period=period,
+            defaults={'score': score}
         )
-        print(f"Grade saved/updated: id={grade.id}, created={created}")
-        return grade, created
-    else:
-        return None, serializer.errors
+        logger.info(f"{'Saved' if created else 'Updated'} grade: id={grade.id}, enrollment_id={enrollment.id}, subject_id={subject.id}, period_id={period.id}, score={score}")
+        return grade, None
+    except ValidationError as e:
+        logger.error(f"Validation error saving grade: {str(e)}")
+        return None, {"error": str(e)}
+    except Exception as e:
+        logger.error(f"Unexpected error saving grade: {str(e)}")
+        return None, str(e)

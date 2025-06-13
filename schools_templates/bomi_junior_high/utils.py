@@ -18,14 +18,13 @@ logger = logging.getLogger(__name__)
 TEMPLATE_PATH = os.path.join(settings.MEDIA_ROOT, "templates", "report_card_compact.docx")
 OUTPUT_DIR = os.path.join(settings.MEDIA_ROOT, "output_gradesheets")
 
-
 def generate_gradesheet_pdf(level_id, student_id=None, academic_year=None):
     """
     Generate individual report card PDFs for students in the given level_id or a single student_id.
     Returns a list of generated PDF paths or a single merged PDF path for bulk printing.
     """
     try:
-        logger.debug(f"Starting PDF generation for level_id={level_id}, student_id={student_id}")
+        logger.debug(f"Starting PDF generation for level_id={level_id}, student_id={student_id}, academic_year={academic_year}")
         # Create output directory if it doesn't exist
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -45,11 +44,16 @@ def generate_gradesheet_pdf(level_id, student_id=None, academic_year=None):
         if student_id:
             logger.debug(f"Querying single student: {student_id}")
             student = Student.objects.get(id=student_id)
-            enrollments = Enrollment.objects.filter(student_id=student_id, level_id=level_id, academic_year=academic_year)
+            enrollments = Enrollment.objects.filter(student_id=student_id, level_id=level_id)
+            if academic_year:  # Only filter by academic_year if provided
+                enrollments = enrollments.filter(academic_year__name=academic_year)
             students = [student] if enrollments.exists() else []
         else:
             logger.debug(f"Querying all students for level: {level_id}")
-            enrollments = Enrollment.objects.filter(level_id=level_id).select_related("student")
+            enrollments = Enrollment.objects.filter(level_id=level_id)
+            if academic_year:
+                enrollments = enrollments.filter(academic_year__name=academic_year)
+            enrollments = enrollments.select_related("student")
             students = [enrollment.student for enrollment in enrollments]
 
         if not students:

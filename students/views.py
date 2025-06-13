@@ -43,7 +43,6 @@ class StudentViewSet(viewsets.ModelViewSet):
                     student=student,
                     level=level,
                     academic_year=academic_year,
-                    enrollment_date=academic_year.start_date
                 )
                 logger.info(f"Created enrollment for student {student.id} in level {level.id}, year {academic_year.name}")
 

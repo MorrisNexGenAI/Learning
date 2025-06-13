@@ -1,7 +1,7 @@
 from rest_framework import serializers
-from .models import GradeSheet
+from .models import GradeSheetPDF
 
 class GradeSheetserializer(serializers.ModelSerializer):
     class Meta:
-        model = GradeSheet
+        model = GradeSheetPDF
         fields = '__all__'
