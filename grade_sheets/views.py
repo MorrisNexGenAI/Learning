@@ -1,34 +1,29 @@
-import time
+import logging
 import os
-import json
 from urllib.request import Request
 from django.shortcuts import render, redirect
 from django.test import RequestFactory
 from django.urls import reverse
 from django.contrib import messages
 from django.conf import settings
+from django.views.decorators.csrf import csrf_protect
+from django.http import HttpResponse, FileResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.views.decorators.csrf import csrf_protect
-from django.http import HttpResponse, FileResponse
-from schools_templates.bomi_junior_high.utils import generate_gradesheet_pdf
-from students.views import get_students_by_level, format_student_data, format_student_name
-from levels.views import get_level_by_id, get_all_levels
-from grades.views import get_grade_map, calc_semester_avg, calc_final_avg, save_grade
-from subjects.views import get_subjects_by_level
-from periods.views import get_all_periods
+from rest_framework.views import APIView
+from students.helper import get_students_by_level, format_student_data, format_student_name
+from levels.helper import get_level_by_id, get_all_levels
+from grades.helper import get_grade_map, save_grade
+from subjects.helper import get_subjects_by_level
+from periods.helpers import get_all_periods
 from enrollment.views import get_enrollment_by_student_level
 from grades.models import Grade
-from grades.serializers import GradeSerializer
 from .models import GradeSheetPDF
-import logging
-from .periodic_utils import generate_periodic_gradesheet_pdf
-from .yearly_utils import generate_yearly_gradesheet_pdf
-from rest_framework.views import APIView
 from academic_years.models import AcademicYear
-from datetime import timedelta
-from django.utils import timezone
+from pass_and_failed.models import PassFailedStatus
+from .pdf_utils import generate_gradesheet_pdf
+from .yearly_pdf_utils import generate_yearly_gradesheet_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +48,6 @@ class GradeSheetViewSet(viewsets.ViewSet):
             academic_year_obj = AcademicYear.objects.get(name=academic_year)
             saved_grades = []
             skipped_students = []
-            duplicate_students = []
             errors = []
             affected_student_ids = []
 
@@ -103,7 +97,6 @@ class GradeSheetViewSet(viewsets.ViewSet):
                 "message": "Grades processed.",
                 "saved_grades": saved_grades,
                 "skipped_students": skipped_students,
-                "duplicate_students": duplicate_students,
                 "errors": errors
             }
             logger.debug(f"Returning response: {response_data}")
@@ -355,72 +348,6 @@ class GradeSheetViewSet(viewsets.ViewSet):
             logger.error(f"Error serving PDF: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=False, methods=['GET'], url_path='gradesheet/pdf')
-    def generate_gradesheet_pdf_view(self, request):
-        level_id = request.query_params.get('level_id')
-        student_id = request.query_params.get('student_id')
-        academic_year = request.query_params.get('academic_year')
-        try:
-            if not level_id:
-                return Response({"error": "level_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            academic_year_obj = None
-            if academic_year:
-                academic_year_obj = AcademicYear.objects.get(name=academic_year)
-            
-            pdf_query = GradeSheetPDF.objects.filter(
-                level_id=level_id,
-                student_id=student_id if student_id else None,
-                academic_year=academic_year_obj if academic_year_obj else None
-            )
-            if pdf_query.exists():
-                pdf_record = pdf_query.first()
-                latest_grade = Grade.objects.filter(
-                    enrollment__level_id=level_id,
-                    enrollment__student_id=student_id if student_id else None,
-                    enrollment__academic_year=academic_year_obj if academic_year_obj else None
-                ).order_by('-updated_at').first()
-                
-                if latest_grade and latest_grade.updated_at > pdf_record.updated_at:
-                    logger.info(f"New grades detected since PDF update at {pdf_record.updated_at}. Regenerating PDF.")
-                    pdf_query.delete()
-                elif os.path.exists(pdf_record.pdf_path):
-                    with open(pdf_record.pdf_path, 'rb') as f:
-                        response = FileResponse(f, content_type='application/pdf')
-                        response['Content-Disposition'] = f'attachment; filename="{pdf_record.filename}"'
-                        logger.info(f"Serving existing PDF: {pdf_record.pdf_path}")
-                        return response
-            
-            pdf_paths = generate_gradesheet_pdf(
-                level_id=int(level_id),
-                student_id=int(student_id) if student_id else None,
-                academic_year=academic_year
-            )
-            if not pdf_paths:
-                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year={academic_year}")
-                return Response({"error": "No PDFs generated"}, status=status.HTTP_404_NOT_FOUND)
-            
-            pdf_path = pdf_paths[0]
-            pdf_filename = os.path.basename(pdf_path)
-            GradeSheetPDF.objects.update_or_create(
-                level_id=level_id,
-                student_id=student_id if student_id else None,
-                academic_year=academic_year_obj if academic_year_obj else None,
-                defaults={
-                    'pdf_path': pdf_path,
-                    'filename': pdf_filename,
-                }
-            )
-            
-            logger.info(f"Serving PDF: {pdf_path}")
-            with open(pdf_path, 'rb') as f:
-                response = FileResponse(f, content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="{pdf_filename}"'
-                return response
-        except Exception as e:
-            logger.error(f"Error in generate_gradesheet_pdf_view: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
     @action(detail=False, methods=['GET'], url_path='by_period_subject')
     def fetch_by_subject_and_period(self, request):
         logger.debug(f"Reached fetch_by_subject_and_period action, headers: {request.META}")
@@ -632,27 +559,29 @@ class ReportCardPrintView(APIView):
     def post(self, request):
         level_id = request.data.get("level_id")
         student_id = request.data.get("student_id")
-        card_type = request.data.get("card_type")
-        pass_template = request.data.get("pass_template", True)
         academic_year = request.data.get("academic_year")
 
         if not level_id:
             return Response({"error": "level_id is required"}, status=400)
 
         try:
-            if card_type == "periodic":
-                pdf_paths = generate_periodic_gradesheet_pdf(level_id, student_id, academic_year=academic_year)
-            elif card_type == "yearly":
-                pdf_paths = generate_yearly_gradesheet_pdf(level_id, student_id, pass_template, academic_year=academic_year)
-            else:
-                return Response({"error": "Invalid card_type"}, status=400)
+            academic_year_obj = AcademicYear.objects.get(name=academic_year) if academic_year else None
+            status_obj = PassFailedStatus.objects.filter(
+                student_id=student_id, level_id=level_id, academic_year=academic_year_obj
+            ).first() if student_id else None
+            pass_template = status_obj.status in ['PASS', 'CONDITIONAL'] if status_obj else True
+            pdf_paths = generate_yearly_gradesheet_pdf(
+                level_id=level_id,
+                student_id=student_id,
+                pass_template=pass_template,
+                academic_year=academic_year
+            )
 
             if not pdf_paths:
                 return Response({"error": "No PDFs generated"}, status=404)
 
             pdf_path = pdf_paths[0]
             pdf_filename = os.path.basename(pdf_path)
-            academic_year_obj = AcademicYear.objects.get(name=academic_year) if academic_year else None
             GradeSheetPDF.objects.update_or_create(
                 level_id=level_id,
                 student_id=student_id if student_id else None,
@@ -671,21 +600,10 @@ class ReportCardPrintView(APIView):
             })
 
         except Exception as e:
+            logger.error(f"Error generating PDF: {str(e)}")
             return Response({"error": str(e)}, status=500)
 
 def cors_test(request):
     response = HttpResponse("CORS Test Endpoint")
     response['Access-Control-Allow-Origin'] = 'http://localhost:5173'
     return response
-
-def cleanup_old_pdfs(days=7):
-    cutoff = timezone.now() - timedelta(days=days)
-    old_pdfs = GradeSheetPDF.objects.filter(updated_at__lt=cutoff)
-    for pdf_record in old_pdfs:
-        if os.path.exists(pdf_record.pdf_path):
-            try:
-                os.remove(pdf_record.pdf_path)
-                logger.info(f"Deleted old PDF: {pdf_record.pdf_path}")
-            except Exception as e:
-                logger.error(f"Failed to delete PDF {pdf_record.pdf_path}: {str(e)}")
-        pdf_record.delete()

@@ -1,18 +1,7 @@
 from django.db import models
 
 class AcademicYear(models.Model):
-    ACADEMIC_CHOICE = (
-        ('2024/2025', '2024/2025'),
-        ('2025/2026', '2025/2026'),
-        ('2026/2027', '2026/2027'),
-        ('2027/2028', '2027/2028'),
-    )
-    name = models.CharField(
-        max_length=9,  # Adjusted max_length to fit the academic year format
-        choices=ACADEMIC_CHOICE,
-        unique=True,
-        default='2024/2025'  # Set a valid default value
-    )
+    name = models.CharField(max_length=20, unique=True)  # e.g. "2024/2025"
     start_date = models.DateField()
     end_date = models.DateField()
 
@@ -20,4 +9,4 @@ class AcademicYear(models.Model):
         return self.name
 
     class Meta:
-        ordering = ['-start_date']  # Sort by most recent year
+        ordering = ['-start_date']

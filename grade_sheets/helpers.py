@@ -5,6 +5,9 @@ from grades.models import Grade
 from enrollment.models import Enrollment
 import logging
 
+# Import the new pass/fail utility function
+from .utils import determine_pass_fail
+
 logger = logging.getLogger(__name__)
 
 def get_grade_sheet_data(student_id, level_id, academic_year=None):
@@ -60,9 +63,13 @@ def get_grade_sheet_data(student_id, level_id, academic_year=None):
             }
             subject_data.append(data)
 
+        # Call the pass/fail function and add to the returned data
+        status = determine_pass_fail(student_id, level_id, academic_year)
+
         grade_sheet_data = {
             "name": f"{student.firstName} {student.lastName}",
-            "s": subject_data
+            "s": subject_data,
+            "status": status,  # added pass/fail status here
         }
         logger.info(f"Grade sheet data for student {student_id}, level {level_id}: {grade_sheet_data}")
         return grade_sheet_data

@@ -3,12 +3,13 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .models import Student
 from .serializers import StudentSerializer
-from enrollment.models import Enrollment
-from academic_years.models import AcademicYear
 from levels.models import Level
-from pass_and_failed.models import PassFailedStatus
-from grades.models import Grade
-from subjects.models import Subject
+from academic_years.models import AcademicYear
+
+from .helper import (
+    create_enrollment_for_student,
+    create_pass_failed_status,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +24,10 @@ class StudentViewSet(viewsets.ModelViewSet):
             student = serializer.save()
             logger.info(f"Created student: {student.id} - {student.firstName} {student.lastName}")
 
-            # Extract level and academic_year from request data
             level_id = request.data.get('level')
             academic_year_id = request.data.get('academic_year')
 
             if not level_id or not academic_year_id:
-                logger.warning(f"Missing level or academic_year for student {student.id}")
                 return Response({
                     "student": serializer.data,
                     "warning": "Student created but not enrolled due to missing level or academic_year"
@@ -38,43 +37,14 @@ class StudentViewSet(viewsets.ModelViewSet):
                 level = Level.objects.get(id=level_id)
                 academic_year = AcademicYear.objects.get(id=academic_year_id)
 
-                # Create Enrollment
-                enrollment = Enrollment.objects.create(
-                    student=student,
-                    level=level,
-                    academic_year=academic_year,
-                )
-                logger.info(f"Created enrollment for student {student.id} in level {level.id}, year {academic_year.name}")
+                enrollment = create_enrollment_for_student(student, level, academic_year)
+                create_pass_failed_status(student, level, academic_year, enrollment)
 
-                # Create PassFailedStatus
-                grades = Grade.objects.filter(enrollment=enrollment)
-                subject_count = Subject.objects.filter(level=level).count()
-                expected_grades = subject_count * 8 if subject_count else 1
-                grades_complete = grades.exists()
-                status_value = 'INCOMPLETE' if grades.count() < expected_grades else 'PENDING'
-
-                pass_failed_status = PassFailedStatus.objects.create(
-                    student=student,
-                    level=level,
-                    academic_year=academic_year,
-                    enrollment=enrollment,
-                    grades_complete=grades_complete,
-                    status=status_value,
-                    template_name='pass_template.html'
-                )
-                logger.info(f"Created PassFailedStatus for student {student.id}: {pass_failed_status.id}")
-
-            except (Level.DoesNotExist, AcademicYear.DoesNotExist) as e:
-                logger.error(f"Failed to enroll student {student.id}: {str(e)}")
-                return Response({
-                    "student": serializer.data,
-                    "warning": f"Student created but not enrolled: {str(e)}"
-                }, status=status.HTTP_201_CREATED)
             except Exception as e:
-                logger.error(f"Unexpected error enrolling student {student.id}: {str(e)}")
+                logger.error(f"Post-creation error: {str(e)}")
                 return Response({
                     "student": serializer.data,
-                    "error": f"Failed to create enrollment or status: {str(e)}"
+                    "error": f"Created but enrollment/pass_failed failed: {str(e)}"
                 }, status=status.HTTP_201_CREATED)
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -100,21 +70,3 @@ class StudentViewSet(viewsets.ModelViewSet):
                 return Student.objects.none()
 
         return queryset
-    
-
-def get_students_by_level(level_id):
-    """Fetch students by level ID."""
-    return Student.objects.filter(enrollment__level_id=level_id).distinct()
-
-def format_student_data(student):
-    """Helper to format student data for grade sheets."""
-    return {
-        "student_id": student.id,
-        "student_name": f"{student.firstName} {student.lastName}",
-        "subjects": []
-    }
-
-def format_student_name(student):
-    """Helper to format student name for grade retrieval."""
-    return f"{student.firstName} {student.lastName}"
-

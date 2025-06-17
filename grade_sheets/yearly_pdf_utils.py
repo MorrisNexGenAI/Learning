@@ -1,27 +1,53 @@
-from django.conf import settings
 import os
 import time
 import logging
 import pythoncom
+from django.conf import settings
 from docxtpl import DocxTemplate
 from docx2pdf import convert
 from PyPDF2 import PdfMerger
 from grade_sheets.helpers import get_grade_sheet_data
 from students.models import Student
 from enrollment.models import Enrollment
+from pass_and_failed.models import PassFailedStatus
 
 logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = os.path.join(settings.MEDIA_ROOT, "output_gradesheets")
+DEFAULT_TEMPLATE_PATH = os.path.join(settings.MEDIA_ROOT, "templates", "report_card_compact.docx")
 
-def generate_yearly_gradesheet_pdf(level_id, student_id=None, template_name='yearly_card_pass.docx'):
+def get_template_path(status):
     """
-    Generate Yearly_card PDFs for students in the given level_id or a single student_id.
+    Determine the template path based on the student's pass/fail status.
+    
+    Args:
+        status (str): The pass/fail status (PASS, FAIL, CONDITIONAL, etc.).
+    
+    Returns:
+        str: Path to the appropriate template.
+    """
+    template_map = {
+        'PASS': os.path.join(settings.MEDIA_ROOT, "templates", "yearly_card_pass.docx"),
+        'FAIL': os.path.join(settings.MEDIA_ROOT, "templates", "yearly_card_failed.docx"),
+        'CONDITIONAL': os.path.join(settings.MEDIA_ROOT, "templates", "yearly_card_conditional.docx"),
+    }
+    template_path = template_map.get(status, DEFAULT_TEMPLATE_PATH)
+    if not os.path.exists(template_path):
+        logger.warning(f"Template {template_path} not found, falling back to default")
+        template_path = DEFAULT_TEMPLATE_PATH
+    if not os.path.exists(template_path):
+        raise FileNotFoundError(f"Default template not found at {template_path}")
+    return template_path
+
+def generate_yearly_gradesheet_pdf(level_id, student_id=None, pass_template=True, academic_year=None):
+    """
+    Generate yearly report card PDFs for students in the given level_id or a single student_id.
+    Uses yearly_card_pass.docx, yearly_card_failed.docx, or yearly_card_conditional.docx based on status.
     By Student: Single card with front/back pages.
     By Level: Pairs students on front/back sheets, two cards per sheet in a single docx.
     """
     try:
-        logger.debug(f"Starting Yearly_card PDF generation for level_id={level_id}, student_id={student_id}")
+        logger.debug(f"Starting yearly PDF generation for level_id={level_id}, student_id={student_id}, academic_year={academic_year}")
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR, exist_ok=True)
             logger.info(f"Created output directory: {OUTPUT_DIR}")
@@ -29,29 +55,31 @@ def generate_yearly_gradesheet_pdf(level_id, student_id=None, template_name='yea
         if not os.access(OUTPUT_DIR, os.W_OK):
             raise PermissionError(f"No write permission for {OUTPUT_DIR}")
 
-        template_path = os.path.join(settings.MEDIA_ROOT, "templates", template_name)
-        if not os.path.exists(template_path):
-            raise FileNotFoundError(f"Template not found at {template_path}")
-        logger.info(f"Using template: {template_path}")
-
         pdf_paths = []
         if student_id:
             student = Student.objects.get(id=student_id)
             enrollments = Enrollment.objects.filter(student_id=student_id, level_id=level_id)
+            if academic_year:
+                enrollments = enrollments.filter(academic_year__name=academic_year)
             students = [student] if enrollments.exists() else []
         else:
             enrollments = Enrollment.objects.filter(level_id=level_id).select_related("student")
+            if academic_year:
+                enrollments = enrollments.filter(academic_year__name=academic_year)
             students = [enrollment.student for enrollment in enrollments]
 
         if not students:
-            logger.warning(f"No students found for level_id: {level_id}, student_id: {student_id}")
+            logger.warning(f"No students found for level_id: {level_id}, student_id: {student_id}, academic_year:{academic_year}")
             return pdf_paths
 
         if student_id:
             student = students[0]
             logger.debug(f"Processing student: {student.id}")
-            student_data = get_grade_sheet_data(student.id, level_id)
+            student_data = get_grade_sheet_data(student.id, level_id, academic_year)
             logger.info(f"Prepared data for student: {student_data['name']}")
+
+            status_obj = PassFailedStatus.objects.filter(student=student, level_id=level_id, academic_year__name=academic_year).first()
+            template_path = get_template_path(status_obj.status if status_obj else ('PASS' if pass_template else 'FAIL'))
 
             student_name = student_data["name"].replace(" ", "_")
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -104,28 +132,27 @@ def generate_yearly_gradesheet_pdf(level_id, student_id=None, template_name='yea
             return pdf_paths
 
         else:
-            from pass_and_failed.models import PassFailedStatus
             for i in range(0, len(students), 2):
                 pair = students[i:i+2]
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
                 pair_id = i // 2 + 1
 
                 context = {}
-                context["name1"] = get_grade_sheet_data(pair[0].id, level_id)["name"]
-                context["s1"] = get_grade_sheet_data(pair[0].id, level_id)["s"]
-                status1 = PassFailedStatus.objects.get(student=pair[0], level_id=level_id)
-                template_path = os.path.join(settings.MEDIA_ROOT, "templates", status1.template_name)
+                context["name1"] = get_grade_sheet_data(pair[0].id, level_id, academic_year)["name"]
+                context["s1"] = get_grade_sheet_data(pair[0].id, level_id, academic_year)["s"]
+                status1 = PassFailedStatus.objects.filter(student=pair[0], level_id=level_id, academic_year__name=academic_year).first()
+                template_path = get_template_path(status1.status if status1 else 'PASS')
 
                 if len(pair) == 2:
-                    context["name2"] = get_grade_sheet_data(pair[1].id, level_id)["name"]
-                    context["s2"] = get_grade_sheet_data(pair[1].id, level_id)["s"]
-                    status2 = PassFailedStatus.objects.get(student=pair[1], level_id=level_id)
-                    if status2.template_name != status1.template_name:
-                        logger.warning(f"Different templates for pair {pair_id}, using template for first student")
+                    context["name2"] = get_grade_sheet_data(pair[1].id, level_id, academic_year)["name"]
+                    context["s2"] = get_grade_sheet_data(pair[1].id, level_id, academic_year)["s"]
+                    status2 = PassFailedStatus.objects.filter(student=pair[1], level_id=level_id, academic_year__name=academic_year).first()
+                    if status2 and status2.status != status1.status:
+                        logger.warning(f"Different statuses for pair {pair_id}, using template for first student")
                 else:
                     context["name2"] = ""
                     context["s2"] = [
-                        {"sn": "", "1st": "-", "2nd": "-", "3rd": "-", "1se": "-", "1sa": "-", "4th": "-", "5th": "-", "6th": "-", "2se": "-", "2sa": "-", "fa": "-"}
+                        {"sn": "", "1": "-", "2": "-", "3": "-", "1s": "-", "4": "-", "5": "-", "6": "-", "2s": "-", "1a": "-", "2a": "-", "f": "-"}
                     ] * 9
 
                 docx_path = os.path.join(OUTPUT_DIR, f"yearly_card_pair_{pair_id}_{timestamp}.docx")
@@ -196,5 +223,5 @@ def generate_yearly_gradesheet_pdf(level_id, student_id=None, template_name='yea
             return pdf_paths
 
     except Exception as e:
-        logger.error(f"Error generating Yearly_card PDF: {str(e)}")
-        raise Exception(f"Error generating Yearly_card PDF: {str(e)}")
+        logger.error(f"Error generating yearly PDF: {str(e)}")
+        raise Exception(f"Error generating yearly PDF: {str(e)}")
