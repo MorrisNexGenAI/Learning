@@ -5,3 +5,4 @@ class AcademicYearSerializer(serializers.ModelSerializer):
     class Meta:
         model = AcademicYear
         fields = ['id', 'name', 'start_date', 'end_date']
+        read_only_fields = ['id']

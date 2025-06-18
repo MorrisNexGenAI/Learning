@@ -8,6 +8,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from enrollment.models import Enrollment
 from students.helper import get_students_by_level, format_student_data, format_student_name
 from levels.helper import get_level_by_id, get_all_levels
 from grades.helper import get_grade_map, save_grade
@@ -20,6 +21,7 @@ from academic_years.models import AcademicYear
 from pass_and_failed.models import PassFailedStatus
 from .pdf_utils import generate_gradesheet_pdf
 from .yearly_pdf_utils import generate_yearly_gradesheet_pdf
+from django.urls import reverse
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,16 @@ class GradeSheetViewSet(viewsets.ViewSet):
                 grade_period_id = grade_data.get('period_id', period_id)
                 if not student_id or score is None or not grade_period_id:
                     errors.append({"student_id": student_id, "error": "Missing student_id, score, or period_id"})
+                    continue
+
+                # Validate score is an integer
+                try:
+                    score = int(score)
+                    if not (0 <= score <= 100):
+                        errors.append({"student_id": student_id, "error": "Score must be an integer between 0 and 100"})
+                        continue
+                except (ValueError, TypeError):
+                    errors.append({"student_id": student_id, "error": "Score must be an integer"})
                     continue
 
                 enrollment = get_enrollment_by_student_level(student_id, level_id, academic_year_obj.id)
@@ -135,13 +147,13 @@ class GradeSheetViewSet(viewsets.ViewSet):
 
                 for subject_data in subjects_data.values():
                     if all(subject_data.get(p) is not None for p in ["1", "2", "3", "1s"]):
-                        sem1_period_avg = (subject_data["1"] + subject_data["2"] + subject_data["3"]) / 3
-                        subject_data["1a"] = round((sem1_period_avg + subject_data["1s"]) / 2, 1)
+                        sem1_period_avg = (subject_data["1"] + subject_data["2"] + subject_data["3"]) // 3
+                        subject_data["1a"] = (sem1_period_avg + subject_data["1s"]) // 2
                     if all(subject_data.get(p) is not None for p in ["4", "5", "6", "2s"]):
-                        sem2_period_avg = (subject_data["4"] + subject_data["5"] + subject_data["6"]) / 3
-                        subject_data["2a"] = round((sem2_period_avg + subject_data["2s"]) / 2, 1)
+                        sem2_period_avg = (subject_data["4"] + subject_data["5"] + subject_data["6"]) // 3
+                        subject_data["2a"] = (sem2_period_avg + subject_data["2s"]) // 2
                     if subject_data["1a"] is not None and subject_data["2a"] is not None:
-                        subject_data["f"] = round((subject_data["1a"] + subject_data["2a"]) / 2, 1)
+                        subject_data["f"] = (subject_data["1a"] + subject_data["2a"]) // 2
 
                 student_data["subjects"] = list(subjects_data.values())
                 result.append(student_data)
@@ -352,7 +364,7 @@ class GradeSheetViewSet(viewsets.ViewSet):
                 {
                     "student_id": grade.enrollment.student.id,
                     "student_name": format_student_name(grade.enrollment.student),
-                    "score": float(grade.score),
+                    "score": grade.score,  # No float casting needed
                     "period_id": grade.period.id
                 }
                 for grade in grades
@@ -466,10 +478,13 @@ def input_grades_view(request):
                 student_id = key.split('[')[1].split(']')[0]
                 if score:
                     try:
-                        score = float(score)
+                        score = int(score)  # Parse as integer
+                        if not (0 <= score <= 100):
+                            messages.error(request, f"Score for student ID {student_id} must be an integer between 0 and 100")
+                            continue
                         grades.append({'student_id': student_id, 'score': score})
                     except ValueError:
-                        messages.error(request, f"Invalid score for student ID {student_id}")
+                        messages.error(request, f"Invalid score for student ID {student_id}: must be an integer")
                         continue
 
         if not all([level_id, subject_id, academic_year, grades]):

@@ -8,7 +8,7 @@ from .models import PassFailedStatus
 from academic_years.models import AcademicYear
 from .helper import handle_validate_status, initialize_missing_statuses
 from grade_sheets.yearly_pdf_utils import generate_yearly_gradesheet_pdf
-from grade_sheets.models import GradeSheetPDF
+from grade_sheets.models import StudentGradeSheetPDF  # Changed from GradeSheetPDF
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class PassFailedStatusViewSet(viewsets.ModelViewSet):
 
             pdf_path = pdf_paths[0]
             pdf_filename = os.path.basename(pdf_path)
-            GradeSheetPDF.objects.update_or_create(
+            StudentGradeSheetPDF.objects.update_or_create(  # Changed from GradeSheetPDF
                 level_id=status_obj.level.id,
                 student_id=status_obj.student.id,
                 academic_year=status_obj.academic_year,

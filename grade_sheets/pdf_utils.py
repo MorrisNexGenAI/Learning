@@ -3,7 +3,9 @@ import pythoncom
 from docx2pdf import convert
 from PyPDF2 import PdfMerger
 from django.conf import settings
-from .helper import get_grade_sheet_data
+
+from enrollment.models import Enrollment
+from .helpers import get_grade_sheet_data
 from docx import Document
 
 def generate_gradesheet_pdf(level_id, student_id=None, academic_year_id=None):

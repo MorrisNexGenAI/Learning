@@ -305,3 +305,62 @@ ALLOWED_HOSTS is empty, preventing the app from running in production; it needs 
 The students.api inclusion in urls.py is misleading, as it handles routes for all apps, suggesting it should be renamed (e.g., api.urls) or moved to a project-level api module.
 The cors-test endpoint is useful for debugging but should be removed or secured in production to avoid unnecessary exposure.
 The SQLite database may not scale for production use, requiring migration to a more robust database (e.g., PostgreSQL) for concurrent access.
+
+Academic Years App
+The academic_years app manages academic year records in the school management system, defining periods (e.g., "2024/2025") with start and end dates. It supports apps like enrollment, grade_sheets, and pass_and_failed by associating records with specific academic years. The app includes a model for storing year data, a serializer for API interactions, a viewset for CRUD operations, and a helper file for utility functions.
+Files and Functionality
+Models
+The AcademicYear model defines the structure for academic year records. It includes:
+
+name (CharField, max_length=20, unique=True): Year name in "YYYY/YYYY" format (e.g., "2024/2025").
+start_date (DateField): Start date of the academic year.
+end_date (DateField): End date of the academic year.
+Validators: A regex validator ensures name follows "YYYY/YYYY". A clean() method validates that end_date is after start_date and matches the years in name.
+The __str__ method returns the name (e.g., "2024/2025").
+Meta: Unique constraint on name and ordering by -start_date (most recent first).
+
+Serializers
+The AcademicYearSerializer exposes id, name, start_date, and end_date for API interactions. It supports serialization and deserialization for creating, retrieving, updating, or deleting academic years via RESTful APIs. The id field is read-only to prevent accidental updates.
+Views
+The AcademicYearViewSet provides RESTful API endpoints for managing academic years, using the AcademicYearSerializer. It implements:
+
+list: Fetches all academic years, with optional filtering by is_active (current year based on today’s date) or name.
+retrieve: Fetches a single academic year by ID.
+create/update/delete: Handled by Django REST Framework’s default methods.
+Features: Pagination (100 items per page), caching (1-hour timeout), filtering by is_active (where start_date ≤ today ≤ end_date) and name, and ordering by -start_date.
+
+Helper
+The helper.py file contains utility functions:
+
+get_all_academic_years: Retrieves all academic years, cached for 1 hour.
+get_academic_year_by_id: Fetches an academic year by ID, returning None if not found.
+get_academic_year_by_name: Fetches an academic year by name (e.g., "2024/2025"), returning None if not found.
+get_current_academic_year: Returns the academic year containing today’s date, cached for 1 hour.
+create_academic_year: Creates a new academic year with name, start_date, and end_date.
+update_academic_year: Updates an academic year’s name, start_date, or end_date by ID, raising an error if not found.
+delete_academic_year: Deletes an academic year by ID, returning True on success or False if not found.
+
+Pros and Cons
+Pros
+
+The AcademicYear model’s unique constraint on name prevents duplicate years, ensuring data integrity.
+The regex validator and clean() method enforce a consistent "YYYY/YYYY" format and valid date ranges.
+The serializer explicitly defines fields (id, name, start_date, end_date), avoiding exposure of sensitive data.
+Helper functions cover common operations (fetch, create, update, delete, current year), enhancing modularity and reusability.
+The viewset’s filtering by is_active and caching improves efficiency for current-year queries.
+Pagination and indexing on start_date and end_date support scalability for large datasets.
+
+Cons
+
+Lack of Validation for name Format (Resolved): The name field lacked validation for "YYYY/YYYY", risking inconsistent data.
+Viewset Queryset Lacking Filtering (Resolved): The queryset didn’t filter by active status or date range, making current-year queries inefficient.
+No Current Year Helper (Resolved): No function existed to retrieve the current academic year based on the system date.
+No Created/Updated Timestamps: The model lacks created_at and updated_at fields, limiting auditability.
+No Validation for Overlapping Years: The model allows overlapping date ranges (e.g., two years covering 2024), which could confuse logic.
+
+Resolved Cons
+
+Lack of Validation for name Format: Added a RegexValidator for "YYYY/YYYY" and a clean() method to validate start_date, end_date, and name year alignment.
+Viewset Queryset Lacking Filtering: Added filtering by is_active=true (current year) and name, with pagination and caching.
+No Current Year Helper: Added get_current_academic_year to fetch the active year based on today’s date, with caching.
+
