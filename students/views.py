@@ -31,4 +31,4 @@ class StudentViewSet(viewsets.ModelViewSet):
                 models.Q(firstName__icontains=search) | models.Q(lastName__icontains=search)
             )
 
-        return queryset.select_related('enrollment')
+        return queryset.order_by('id')

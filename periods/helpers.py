@@ -1,5 +1,7 @@
 from .models import Period
 
+VALID_PERIODS = [choice[0] for choice in Period.PERIOD_CHOICE]
+
 def get_all_periods():
     """Fetch all periods."""
     return Period.objects.all()
@@ -11,22 +13,23 @@ def get_period_by_id(period_id):
     except Period.DoesNotExist:
         return None
 
-def create_period(period_code, is_exam=False):
-    """Create a new period (e.g. '1st', '2exam')."""
+def create_period(period_code):
+    """Create a new period if valid (e.g. '1st', '2exam')."""
+    if period_code not in VALID_PERIODS:
+        raise ValueError(f"Invalid period code: '{period_code}'.")
     period, created = Period.objects.get_or_create(
-        period=period_code,
-        defaults={'is_exam': is_exam}
+        period=period_code
     )
     return period, created
 
-def update_period(period_id, new_code=None, new_is_exam=None):
-    """Update the code or exam status of a period."""
+def update_period(period_id, new_code=None):
+    """Update the code of a period if valid."""
     try:
         period = Period.objects.get(id=period_id)
         if new_code:
+            if new_code not in VALID_PERIODS:
+                raise ValueError(f"Invalid period code: '{new_code}'.")
             period.period = new_code
-        if new_is_exam is not None:
-            period.is_exam = new_is_exam
         period.save()
         return period
     except Period.DoesNotExist:

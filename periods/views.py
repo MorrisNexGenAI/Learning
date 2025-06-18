@@ -10,13 +10,10 @@ logger = logging.getLogger(__name__)
 
 class PeriodViewSet(viewsets.ViewSet):
     """
-    A ViewSet for managing periods, including listing, retrieving, creating, and deleting.
+    A ViewSet for managing periods.
     """
+
     def list(self, request):
-        """
-        GET /api/periods/
-        Fetch all periods.
-        """
         try:
             periods = get_all_periods()
             serializer = PeriodSerializer(periods, many=True)
@@ -27,10 +24,6 @@ class PeriodViewSet(viewsets.ViewSet):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def retrieve(self, request, pk=None):
-        """
-        GET /api/periods/{id}/
-        Fetch a specific period by ID.
-        """
         try:
             period = get_period_by_id(pk)
             if not period:
@@ -42,3 +35,19 @@ class PeriodViewSet(viewsets.ViewSet):
         except Exception as e:
             logger.error(f"Error fetching period {pk}: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def destroy(self, request, pk=None):
+        try:
+            period = get_period_by_id(pk)
+            if not period:
+                return Response({"error": "Period not found."}, status=404)
+
+            if Grade.objects.filter(period=period).exists():
+                return Response({"error": "Cannot delete period linked to grades."}, status=400)
+
+            period.delete()
+            logger.info(f"Deleted period {pk}")
+            return Response(status=204)
+        except Exception as e:
+            logger.error(f"Error deleting period {pk}: {str(e)}")
+            return Response({"error": str(e)}, status=500)
