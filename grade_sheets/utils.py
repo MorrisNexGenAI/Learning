@@ -1,75 +1,39 @@
-import os
-import logging
-from django.utils import timezone
-from datetime import timedelta
-from django.db.models import Avg
-from grades.models import Grade
+from grades.models import Grade, GradePolicy
+from enrollment.models import Enrollment
 from subjects.models import Subject
-from .models import GradeSheetPDF
-
-logger = logging.getLogger(__name__)
+from .models import StudentGradeSheetPDF, LevelGradeSheetPDF
+import os
+from datetime import datetime, timedelta
 
 def cleanup_old_pdfs(days=2):
-    """
-    Delete PDF files and their database records older than the specified number of days.
-    
-    Args:
-        days (int): Number of days to consider for cleanup. Defaults to 2.
-    """
-    cutoff = timezone.now() - timedelta(days=days)
-    old_pdfs = GradeSheetPDF.objects.filter(updated_at__lt=cutoff)
-    for pdf_record in old_pdfs:
-        if os.path.exists(pdf_record.pdf_path):
-            try:
-                os.remove(pdf_record.pdf_path)
-                logger.info(f"Deleted old PDF: {pdf_record.pdf_path}")
-            except Exception as e:
-                logger.error(f"Failed to delete PDF {pdf_record.pdf_path}: {str(e)}")
-        pdf_record.delete()
+    """Delete PDFs older than specified days."""
+    cutoff = datetime.now() - timedelta(days=days)
+    for model in [StudentGradeSheetPDF, LevelGradeSheetPDF]:
+        old_pdfs = model.objects.filter(created_at__lt=cutoff)
+        for pdf in old_pdfs:
+            if os.path.exists(pdf.pdf_path):
+                os.remove(pdf.pdf_path)
+        old_pdfs.delete()
 
-def determine_pass_fail(student_id, level_id, academic_year=None, passing_score=50):
-    """
-    Determine pass/fail/incomplete status for a student given level and academic year.
-    Conditions:
-    - All subjects must have at least 8 grades recorded.
-    - Average score per subject must be >= passing_score.
-    - If any subject has < 8 grades or no grades, status = INCOMPLETE.
-    - If any subject average < passing_score, status = FAILED.
-    - Otherwise, status = PASSED.
-    """
+def determine_pass_fail(student_id, level_id, academic_year_id):
+    """Calculate pass/fail status based on grades."""
     try:
-        # Get all subjects for the level
+        enrollment = Enrollment.objects.get(student_id=student_id, level_id=level_id, academic_year_id=academic_year_id)
+        grades = Grade.objects.filter(enrollment=enrollment)
         subjects = Subject.objects.filter(level_id=level_id)
-        if not subjects.exists():
-            logger.warning(f"No subjects found for level {level_id}")
-            return "INCOMPLETE"
+        policy = GradePolicy.objects.filter(level_id=level_id).first()
+        required_grades = policy.required_grades if policy else 8
+        passing_threshold = policy.passing_threshold if policy else 50
 
+        if not grades.exists():
+            return 'INCOMPLETE'
         for subject in subjects:
-            # Filter grades for this student, subject, level, and optionally academic year
-            grade_query = Grade.objects.filter(
-                enrollment__student_id=student_id,
-                subject=subject,
-                enrollment__level_id=level_id
-            )
-            if academic_year:
-                grade_query = grade_query.filter(enrollment__academic_year__name=academic_year)
-
-            grade_count = grade_query.count()
-            if grade_count < 8:
-                logger.debug(f"Subject {subject.subject} has incomplete grades ({grade_count} < 8)")
-                return "INCOMPLETE"
-
-            avg_score = grade_query.aggregate(avg=Avg('score'))['avg']
-            if avg_score is None:
-                logger.debug(f"Subject {subject.subject} has no scores recorded")
-                return "INCOMPLETE"
-            if avg_score < passing_score:
-                logger.debug(f"Subject {subject.subject} failed with avg score {avg_score}")
-                return "FAILED"
-
-        logger.info(f"Student {student_id} passed level {level_id} for year {academic_year}")
-        return "PASSED"
-
-    except Exception as e:
-        logger.error(f"Error determining pass/fail for student {student_id}: {str(e)}")
-        return "INCOMPLETE"
+            subject_grades = grades.filter(subject=subject)
+            if subject_grades.count() < required_grades:
+                return 'INCOMPLETE'
+            avg_score = sum(g.score for g in subject_grades) / subject_grades.count()
+            if avg_score < passing_threshold:
+                return 'FAILED'
+        return 'PASSED'
+    except Enrollment.DoesNotExist:
+        return 'INCOMPLETE'

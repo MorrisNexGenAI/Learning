@@ -1,22 +1,20 @@
 from django.db import models
-from academic_years.models import AcademicYear
-from levels.models import Level
 
-# Create your models here.
 class Student(models.Model):
     GENDER_CHOICES = (
         ('M', 'Male'),
         ('F', 'Female'),
         ('O', 'Other'),
     )
-   
     firstName = models.CharField(max_length=50)
     lastName = models.CharField(max_length=50)
-    gender = models.CharField(max_length =1,choices=GENDER_CHOICES)
-    dob = models.DateField()
+    date_of_birth = models.DateField()
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
-   
-   
-   
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('firstName', 'lastName', 'date_of_birth')
+
     def __str__(self):
         return f"{self.firstName} {self.lastName}"

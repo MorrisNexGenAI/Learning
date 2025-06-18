@@ -1,43 +1,28 @@
+from django.core.cache import cache
+from subjects.models import Subject
 from .models import Level
-
-def get_all_levels():
-    """Fetch all levels."""
-    return Level.objects.all()
 
 def get_level_by_id(level_id):
     """Fetch a level by ID."""
-    try:
-        return Level.objects.get(id=level_id)
-    except Level.DoesNotExist:
-        return None
+    return Level.objects.filter(id=level_id).first()
 
-def get_level_by_name(name):
-    """Fetch a level by name (if you add a name field)."""
-    try:
-        return Level.objects.get(name=name)
-    except Level.DoesNotExist:
-        return None
+def get_all_levels():
+    """Fetch all levels, ordered by name."""
+    cache_key = 'all_levels'
+    levels = cache.get(cache_key)
+    if levels is None:
+        levels = Level.objects.all().order_by('name')
+        cache.set(cache_key, levels, timeout=3600)  # Cache for 1 hour
+    return levels
 
-def create_level(name):
-    """Create a new level."""
-    return Level.objects.create(name=name)
-
-def update_level(level_id, new_name=None):
-    """Update a level's name."""
-    try:
-        level = Level.objects.get(id=level_id)
-        if new_name:
-            level.name = new_name
-        level.save()
-        return level
-    except Level.DoesNotExist:
-        raise ValueError(f"Level with ID {level_id} does not exist.")
-
-def delete_level(level_id):
-    """Delete a level by ID."""
-    try:
-        level = Level.objects.get(id=level_id)
-        level.delete()
-        return True
-    except Level.DoesNotExist:
-        return False
+def get_subjects_by_level(level_id):
+    """Fetch subjects for a level, with caching."""
+    cache_key = f'subjects_level_{level_id}'
+    subjects = cache.get(cache_key)
+    if subjects is None:
+        subjects = Subject.objects.filter(level_id=level_id).select_related('level')
+        subjects_dict = {str(s.id): s.subject for s in subjects}
+        cache.set(cache_key, subjects_dict, timeout=3600)  # Cache for 1 hour
+    else:
+        subjects_dict = subjects
+    return subjects_dict

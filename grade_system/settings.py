@@ -91,12 +91,14 @@ DATABASES = {
     }
 }
 
+
 REST_FRAMEWORK = {
     'DATE_INPUT_FORMATS': ['%Y-%m-%d'],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-        # Remove 'rest_framework.renderers.BrowsableAPIRenderer' to avoid HTML responses
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 100
 }
 
 # Password validation

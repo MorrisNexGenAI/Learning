@@ -1,14 +1,15 @@
 from rest_framework import serializers
 from .models import Enrollment
-from students.serializers import StudentSerializer
-from levels.serializers import LevelSerializer
-from academic_years.serializers import AcademicYearSerializer  # Adjust path
+from students.models import Student
+from levels.models import Level
+from academic_years.models import AcademicYear
 
 class EnrollmentSerializer(serializers.ModelSerializer):
-    student = StudentSerializer(read_only=True)
-    level = LevelSerializer(read_only=True)
-    academic_year = AcademicYearSerializer(read_only=True)
+    student = serializers.PrimaryKeyRelatedField(queryset=Student.objects.all())
+    level = serializers.PrimaryKeyRelatedField(queryset=Level.objects.all())
+    academic_year = serializers.PrimaryKeyRelatedField(queryset=AcademicYear.objects.all())
 
     class Meta:
         model = Enrollment
-        fields = ['id', 'student', 'level', 'academic_year', 'date_enrolled']
+        fields = ['id', 'student', 'level', 'academic_year', 'date_enrolled', 'enrollment_status']
+
