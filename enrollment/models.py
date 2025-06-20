@@ -15,7 +15,7 @@ class Enrollment(models.Model):
     enrollment_status = models.CharField(max_length=10, choices=ENROLLMENT_STATUS_CHOICES, default='ENROLLED')
 
     class Meta:
-        unique_together = ('student', 'level')
+        unique_together = ('student', 'level', 'academic_year')
 
     def __str__(self):
         return f"{self.student} - {self.level} - {self.academic_year}"

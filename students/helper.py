@@ -15,7 +15,7 @@ def get_students_by_level(level_id, academic_year_id=None):
     queryset = Student.objects.filter(enrollment__level_id=level_id)
     if academic_year_id:
         queryset = queryset.filter(enrollment__academic_year_id=academic_year_id)
-    return queryset.select_related('student').distinct()
+    return queryset.distinct()
 
 def format_student_data(student):
     """Format student data for use in grade sheets."""
@@ -109,3 +109,32 @@ def create_pass_failed_status(student, level, academic_year, enrollment, status=
 
         logger.info(f"{'Created' if created else 'Updated'} PassFailedStatus for student {student.id}: {status}")
         return pass_failed
+
+def get_enrollment_for_student_year(student_id, academic_year_id, level_id):
+    """Fetch enrollment for a student in a specific academic year and level."""
+    try:
+        return Enrollment.objects.filter(
+            student_id=student_id,
+            academic_year_id=academic_year_id,
+            level_id=level_id
+        ).select_related('student').first()
+    except Exception as e:
+        logger.error(f"Error fetching enrollment for student {student_id}: {str(e)}")
+        return None
+    
+from students.models import Student
+
+def clean_duplicate_students(firstName, lastName, dob, level_id):
+    """Delete students with the same name/dob not enrolled in the given level."""
+    students = Student.objects.filter(
+        firstName = firstName,
+        lastName = lastName,
+        dob = dob
+    )
+    deleted = []
+    for student in students:
+        if not student.enrollment.filter(level_id=level_id).exists():
+            deleted.append(student.id)
+            student.delete()
+    print(f"Deleted students with IDs: {deleted}")
+    return deleted

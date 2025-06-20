@@ -16,6 +16,7 @@ from subjects.helper import get_subjects_by_level
 from periods.helpers import get_all_periods
 from enrollment.helper import get_enrollment_by_student_level
 from grades.models import Grade
+from .listLevelHelper import build_gradesheet
 from .models import StudentGradeSheetPDF, LevelGradeSheetPDF
 from academic_years.models import AcademicYear
 from pass_and_failed.models import PassFailedStatus
@@ -36,6 +37,13 @@ class GradeSheetViewSet(viewsets.ViewSet):
         academic_year = request.data.get('academic_year')
 
         logger.debug(f"Received POST data: level_id={level_id}, subject_id={subject_id}, period_id={period_id}, grades={grades}, academic_year={academic_year}")
+
+        if not isinstance(grades, list):
+            grades=[]
+            for key, value in request.data.items():
+                if key.startswith('grades[') and value:
+                    student_id = key.split('[')[1].split(']')[0]
+                    grades.append({'student_id': student_id, 'score': value})
 
         if not all([level_id, subject_id, academic_year]) or not isinstance(grades, list):
             return Response({"error": "Missing or invalid required fields, including academic_year."}, status=status.HTTP_400_BAD_REQUEST)
@@ -110,59 +118,15 @@ class GradeSheetViewSet(viewsets.ViewSet):
         academic_year = request.query_params.get('academic_year')
         if not level_id:
             return Response({"error": "Level ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            academic_year_obj = AcademicYear.objects.get(name=academic_year) if academic_year else None
-            students = get_students_by_level(level_id)
-            if academic_year_obj:
-                students = students.filter(enrollment__academic_year=academic_year_obj).distinct()
-            grade_map = get_grade_map(level_id)
-            subjects_by_id = get_subjects_by_level(level_id)
-
-            result = []
-            for student in students:
-                student_data = format_student_data(student)
-                subjects_data = {
-                    subject_id: {
-                        "subject_id": subject_id,
-                        "subject_name": subject_name,
-                        "1": None,
-                        "2": None,
-                        "3": None,
-                        "1s": None,
-                        "4": None,
-                        "5": None,
-                        "6": None,
-                        "2s": None,
-                        "1a": None,
-                        "2a": None,
-                        "f": None
-                    }
-                    for subject_id, subject_name in subjects_by_id.items()
-                }
-
-                for subject_id, grades in grade_map.get(student.id, {}).items():
-                    if subject_id in subjects_data:
-                        subjects_data[subject_id].update(grades)
-
-                for subject_data in subjects_data.values():
-                    if all(subject_data.get(p) is not None for p in ["1", "2", "3", "1s"]):
-                        sem1_period_avg = (subject_data["1"] + subject_data["2"] + subject_data["3"]) // 3
-                        subject_data["1a"] = (sem1_period_avg + subject_data["1s"]) // 2
-                    if all(subject_data.get(p) is not None for p in ["4", "5", "6", "2s"]):
-                        sem2_period_avg = (subject_data["4"] + subject_data["5"] + subject_data["6"]) // 3
-                        subject_data["2a"] = (sem2_period_avg + subject_data["2s"]) // 2
-                    if subject_data["1a"] is not None and subject_data["2a"] is not None:
-                        subject_data["f"] = (subject_data["1a"] + subject_data["2a"]) // 2
-
-                student_data["subjects"] = list(subjects_data.values())
-                result.append(student_data)
-
+            result = build_gradesheet(level_id, academic_year)
             return Response(result)
-
         except Exception as e:
-            logger.error(f"Error in list_by_level: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error(f"Error in list_by_level:{str(e)}")
+            return Response({"error":str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+       
+
 
     @action(detail=False, methods=['GET'], url_path='gradesheet/pdf/generate')
     def generate_gradesheet_pdf(self, request):
@@ -399,6 +363,7 @@ def gradesheet_home(request):
     """Render grade input home page."""
     levels = get_all_levels()
     academic_years = AcademicYear.objects.all()
+
     selected_level_id = request.GET.get('level_id')
     students = []
     subjects = []
@@ -444,21 +409,15 @@ def gradesheet_view(request):
         return redirect('gradesheet-home')
 
     try:
-        viewset = GradeSheetViewSet()
-        response = viewset.list_by_level(request)
-        if response.status_code != 200:
-            messages.error(request, response.data.get('error', 'Failed to load grades'))
-            return redirect('gradesheet-home')
-
+        gradesheet= build_gradesheet(level_id, academic_year)
         level = get_level_by_id(level_id)
-        level_name = level.name if level else "Unknown Level"
+        level_name = level.name if level else "Unknown level"
         return render(request, 'grade_sheets/gradesheet_view.html', {
-            'gradesheet': response.data,
+            'gradesheet': gradesheet,
             'level_name': level_name,
             'level_id': level_id,
-            'academic_year': academic_year
+            'academic_year':academic_year
         })
-
     except Exception as e:
         logger.error(f"Error in gradesheet_view: {str(e)}")
         messages.error(request, f"Error loading grades: {str(e)}")

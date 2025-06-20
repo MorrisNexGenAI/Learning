@@ -30,7 +30,7 @@ class LevelGradeSheetPDF(models.Model):
     filename = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+
 
     class Meta:
         unique_together = ('level', 'academic_year')

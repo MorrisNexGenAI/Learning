@@ -29,6 +29,15 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="mb-3">
+    <label for="academic_year" class="form-label">Select Academic Year:</label>
+    <select name="academic_year" id="academic_year" class="form-select" onchange="this.form.submit()">
+        <option value="">Choose an academic year</option>
+        {% for year in academic_years %}
+            <option value="{{ year.name }}" {% if year.name == selected_academic_year %}selected{% endif %}>{{ year.name }}</option>
+        {% endfor %}
+    </select>
+</div>
         </form>
         <!-- Grade Input Form -->
         {% if students %}
@@ -36,16 +45,16 @@
             {% if error %}
                 <div class="alert alert-danger">{{ error }}</div>
             {% endif %}
-            <form method="POST" action="{% url 'input-grades' %}">
+            <form method="POST" action="{% url 'input_grades' %}">
                 {% csrf_token %}
                 <input type="hidden" name="level_id" value="{{ selected_level }}">
                 <div class="mb-3">
                     <label for="subject_id" class="form-label">Subject:</label>
                     <select name="subject_id" id="subject_id" class="form-select" required>
                         <option value="">Choose a subject</option>
-                        {% for subject in subjects %}
-                            <option value="{{ subject.id }}">{{ subject.subject }}</option>
-                        {% endfor %}
+                    {% for id, name in subjects.items %}
+    <option value="{{ id }}">{{ name }}</option>
+{% endfor %}    
                     </select>
                 </div>
                 <div class="mb-3">
@@ -67,7 +76,7 @@
                     <tbody>
                         {% for student in students %}
                             <tr>
-                                <td>{{ student.first_name }} {{ student.last_name }}</td>
+                                <td>{{ student.firstName }} {{ student.lastName }}</td>
                                 <td><input type="number" step="0.01" name="grades[{{ student.id }}]" min="0" max="100" class="form-control"></td>
                             </tr>
                         {% endfor %}
