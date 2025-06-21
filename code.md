@@ -1,3 +1,4 @@
+ i will create a seperate files for all these actions so that i can better understand them. after creating the files i will call each within the grade_sheets/views which will serve as my main base to interact with my react frontend but for now let them remain here in this markdow.
  @action(detail=False, methods=['GET'], url_path='gradesheet/pdf/generate')
     def generate_gradesheet_pdf(self, request):
         """GET /api/grade_sheets/gradesheet/pdf/generate/ - Generate PDFs."""
@@ -656,7 +657,10 @@ class ReportCardPrintView(APIView):
 
 def cors_test(request):
     """Test CORS configuration."""
-    return Response({"message": "CORS test successful"}, status=status.HTTP_200_OK) but no avearages are appearing on my react fronend: my gradesheets components:
+    return Response({"message": "CORS test successful"}, status=status.HTTP_200_OK) but no avearages are appearing on my react fronend: 
+    
+    This gradesheets component i will also make sure it aligns with what i need doing development:
+
 import React from 'react';
 import type { Subject, Period, GradeSheet } from '../../types';
 

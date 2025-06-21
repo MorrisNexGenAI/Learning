@@ -77,14 +77,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/cors-test/', cors_test, name='cors-test'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-i also have wsgi(which i don't know), asgi(same too, i don't know).
 
-Core: This is another i can't really explain, maybe you will help me here.
 
-i hope i give you a little view of my backend.
-what i want you do is, i will shar each of my django apps codes with you and you describe it exactly and what it does combining with the little explanation i give about it.
 
-we will start with the first one above which is enrollment.
-what i want you do is: if i share all the codes for an app, you will firstly give the overview and what the app is about then you will go in depth and explain what each files does.
-let start, tell me to send the fist set of codes to kickup.
 
+
+ckup.
+
+ i will create a seperate files for all these actions so that i can better understand them. after creating the files i will call each within the grade_sheets/views which will serve as my main base to interact with my react frontend but for now let them remain here in this markdow.
