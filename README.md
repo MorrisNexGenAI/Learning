@@ -125,7 +125,16 @@ Tailwind CSS: Applied globally and per school template
 
 
 
-🎓 Backend - Student Grading & Report Card System
+
+
+
+
+
+
+
+
+                  > 
+                  > 🎓 Backend - Student Grading & Report Card System
 
 This is the backend of a full-stack student grading and report card system built with Django + Django REST Framework. It provides APIs for student management, grading logic, enrollment tracking, report generation, and academic evaluation.
 
