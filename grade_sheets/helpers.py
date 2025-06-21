@@ -1,3 +1,4 @@
+from venv import logger
 from grades.models import Grade
 from subjects.models import Subject
 from enrollment.models import Enrollment
@@ -24,6 +25,28 @@ def get_grade_sheet_data(student_id, level_id, academic_year_id=None):
             for period in periods:
                 grade = grades.filter(subject=subject, period=period).first()
                 subject_grades[period.period] = grade.score if grade else '-'
+            # Calculate averages
+            try:
+                # First semester average (1a)
+                if all(subject_grades.get(p) != '-' for p in ['1st', '2nd', '3rd', '1exam']):
+                    sem1_period_avg = (int(subject_grades['1st']) + int(subject_grades['2nd']) + int(subject_grades['3rd'])) // 3
+                    subject_grades['1a'] = (sem1_period_avg + int(subject_grades['1exam'])) // 2
+                else:
+                    subject_grades['1a'] = '-'
+                # Second semester average (2a)
+                if all(subject_grades.get(p) != '-' for p in ['4th', '5th', '6th', '2exam']):
+                    sem2_period_avg = (int(subject_grades['4th']) + int(subject_grades['5th']) + int(subject_grades['6th'])) // 3
+                    subject_grades['2a'] = (sem2_period_avg + int(subject_grades['2exam'])) // 2
+                else:
+                    subject_grades['2a'] = '-'
+                # Final average (f)
+                if subject_grades['1a'] != '-' and subject_grades['2a'] != '-':
+                    subject_grades['f'] = (int(subject_grades['1a']) + int(subject_grades['2a'])) // 2
+                else:
+                    subject_grades['f'] = '-'
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error calculating averages for subject {subject.subject}: {str(e)}")
+                subject_grades['1a'] = subject_grades['2a'] = subject_grades['f'] = '-'
             grade_data['s'].append(subject_grades)
 
         return grade_data
