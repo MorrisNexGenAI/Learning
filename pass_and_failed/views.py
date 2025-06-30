@@ -7,7 +7,7 @@ from .serializers import PassFailedStatusSerializer
 from .models import PassFailedStatus
 from academic_years.models import AcademicYear
 from .helper import handle_validate_status, initialize_missing_statuses
-from grade_sheets.yearly_pdf_utils import generate_yearly_gradesheet_pdf
+from grade_sheets.yearly_pdf import generate_yearly_pdf
 from grade_sheets.models import StudentGradeSheetPDF  # Changed from GradeSheetPDF
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class PassFailedStatusViewSet(viewsets.ModelViewSet):
             logger.debug(f"Printing status for pk={pk}, student={status_obj.student.id}, level={status_obj.level.id}")
 
             pass_template = status_obj.status in ['PASS', 'CONDITIONAL']
-            pdf_paths = generate_yearly_gradesheet_pdf(
+            pdf_paths = generate_yearly_pdf(
                 level_id=status_obj.level.id,
                 student_id=status_obj.student.id,
                 pass_template=pass_template,

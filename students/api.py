@@ -6,7 +6,8 @@ from grades.views import GradeViewSet
 from subjects.views import SubjectViewSet
 from periods.views import PeriodViewSet
 from enrollment.views import EnrollmentViewSet
-from grade_sheets.views import GradeSheetViewSet, ReportCardPrintView
+from grade_sheets.pdfView import GradeSheetViewSet
+from grade_sheets.ReportCardPrintView import ReportCardPrintView
 from academic_years.views import AcademicYearViewSet
 from pass_and_failed.views import PassFailedStatusViewSet
 

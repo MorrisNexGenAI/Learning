@@ -1,10 +1,9 @@
+from enrollment.models import Enrollment
 from grades.models import Grade
 from subjects.models import Subject
-from enrollment.models import Enrollment
-from .utils import determine_pass_fail
 from periods.models import Period
+from .utils import determine_pass_fail
 import logging
-
 
 logger = logging.getLogger(__name__)
 
@@ -15,21 +14,23 @@ def get_grade_sheet_data(student_id, level_id, academic_year_id=None):
         grades = Grade.objects.filter(enrollment=enrollment).select_related('subject', 'period')
         subjects = Subject.objects.filter(level_id=level_id)
         periods = Period.objects.all()
-        period_map = {p.id: p.period for p in periods}
+        period_map = {p.id: p.period.lower().replace(' ', '') for p in periods}  # e.g., {'1': '1st', '2': '2nd'}
         logger.debug(f"Period map: {period_map}")
 
         grade_data = {
-            'student_id': student_id,
-            'student_name': f"{enrollment.student.firstName} {enrollment.student.lastName}",
+            'name': f"{enrollment.student.firstName} {enrollment.student.lastName}",
+            'level': enrollment.level.name,
+            'academic_year': enrollment.academic_year.name,
             's': [],
             'status': determine_pass_fail(student_id, level_id, academic_year_id)
         }
 
         for subject in subjects:
-            subject_grades = {'subject_id': str(subject.id), 'sn': subject.subject}
+            subject_grades = {'sn': subject.subject}
             for period in periods:
                 grade = grades.filter(subject=subject, period=period).first()
-                subject_grades[period.period] = str(grade.score) if grade and grade.score is not None else '-'
+                period_key = period_map.get(period.id, period.period.lower().replace(' ', ''))
+                subject_grades[period_key] = str(grade.score) if grade and grade.score is not None else '-'
             
             # Calculate averages
             try:
@@ -67,11 +68,26 @@ def get_grade_sheet_data(student_id, level_id, academic_year_id=None):
 
             grade_data['s'].append(subject_grades)
 
-        logger.info(f"Grade sheet data built for student_id={student_id}, level_id={level_id}, academic_year_id={academic_year_id}")
+        # Ensure at least 9 subjects for template
+        while len(grade_data['s']) < 9:
+            grade_data['s'].append({
+                'sn': f"Subject {len(grade_data['s']) + 1}",
+                '1st': '-', '2nd': '-', '3rd': '-', '1exam': '-', '1a': '-',
+                '4th': '-', '5th': '-', '6th': '-', '2exam': '-', '2a': '-', 'f': '-'
+            })
+
+        logger.info(f"Grade sheet data built for student_id={student_id}, level_id={level_id}, academic_year_id={academic_year_id}: {grade_data}")
         return grade_data
     except Enrollment.DoesNotExist:
         logger.warning(f"No enrollment found for student_id={student_id}, level_id={level_id}, academic_year_id={academic_year_id}")
-        return None
+        return {
+            'name': 'Unknown Student',
+            'level': 'Unknown Level',
+            'academic_year': 'Unknown Year',
+            's': [{'sn': f'Subject {i}', '1st': '-', '2nd': '-', '3rd': '-', '1exam': '-', '1a': '-',
+                   '4th': '-', '5th': '-', '6th': '-', '2exam': '-', '2a': '-', 'f': '-'} for i in range(1, 10)],
+            'status': 'Unknown'
+        }
     except Exception as e:
         logger.error(f"Error in get_grade_sheet_data: {str(e)}")
-        raise
+        return None
