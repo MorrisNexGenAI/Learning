@@ -1,9 +1,14 @@
+import os
+import logging
+from datetime import datetime, timedelta
 from grades.models import Grade, GradePolicy
 from enrollment.models import Enrollment
 from subjects.models import Subject
 from .models import StudentGradeSheetPDF, LevelGradeSheetPDF
-import os
-from datetime import datetime, timedelta
+from pass_and_failed.models import PassFailedStatus
+from pass_and_failed.helper import promote_student_if_eligible
+
+logger = logging.getLogger(__name__)
 
 def cleanup_old_pdfs(days=2):
     """Delete PDFs older than specified days."""
@@ -12,11 +17,14 @@ def cleanup_old_pdfs(days=2):
         old_pdfs = model.objects.filter(created_at__lt=cutoff)
         for pdf in old_pdfs:
             if os.path.exists(pdf.pdf_path):
-                os.remove(pdf.pdf_path)
+                try:
+                    os.remove(pdf.pdf_path)
+                except OSError as e:
+                    logger.warning(f"Error deleting PDF {pdf.pdf_path}: {str(e)}")
         old_pdfs.delete()
 
 def determine_pass_fail(student_id, level_id, academic_year_id):
-    """Calculate pass/fail status based on grades."""
+    """Calculate pass/fail status based on grades and update PassFailedStatus."""
     try:
         enrollment = Enrollment.objects.get(student_id=student_id, level_id=level_id, academic_year_id=academic_year_id)
         grades = Grade.objects.filter(enrollment=enrollment)
@@ -24,27 +32,49 @@ def determine_pass_fail(student_id, level_id, academic_year_id):
         policy = GradePolicy.objects.filter(level_id=level_id).first()
         required_grades = policy.required_grades if policy else 8
         passing_threshold = policy.passing_threshold if policy else 50
+        conditional_threshold = policy.conditional_threshold if policy and hasattr(policy, 'conditional_threshold') else 40  # Assume conditional threshold
 
         if not grades.exists():
-            return 'INCOMPLETE'
-        for subject in subjects:
-            subject_grades = grades.filter(subject=subject)
-            if subject_grades.count() < required_grades:
-                return 'INCOMPLETE'
-            avg_score = sum(g.score for g in subject_grades) / subject_grades.count()
-            if avg_score < passing_threshold:
-                return 'FAILED'
-        return 'PASSED'
-    except Enrollment.DoesNotExist:
-        return 'INCOMPLETE'
-    
-import logging
-from grades.models import Grade
-from academic_years.models import AcademicYear
-from enrollment.helper import get_enrollment_by_student_level
-from .models import StudentGradeSheetPDF
+            status = 'INCOMPLETE'
+        else:
+            status = 'PASS'  # Default to PASS, adjust based on checks
+            for subject in subjects:
+                subject_grades = grades.filter(subject=subject)
+                if subject_grades.count() < required_grades:
+                    status = 'INCOMPLETE'
+                    break
+                avg_score = sum(g.score for g in subject_grades) / subject_grades.count()
+                if avg_score < passing_threshold:
+                    if avg_score >= conditional_threshold:
+                        status = 'CONDITIONAL'
+                    else:
+                        status = 'FAIL'
+                        break
 
-logger = logging.getLogger(__name__)
+        # Update or create PassFailedStatus
+        pass_failed_status, created = PassFailedStatus.objects.update_or_create(
+            student_id=student_id,
+            level_id=level_id,
+            academic_year_id=academic_year_id,
+            defaults={
+                'status': status,
+                'enrollment': enrollment,
+                'grades_complete': status not in ['INCOMPLETE'],
+            }
+        )
+        logger.info(f"{'Created' if created else 'Updated'} PassFailedStatus for student {student_id}, level {level_id}, year {academic_year_id}: {status}")
+
+        # Trigger promotion if PASS or CONDITIONAL
+        if status in ['PASS', 'CONDITIONAL']:
+            promote_student_if_eligible(pass_failed_status, logger)
+
+        return status
+    except Enrollment.DoesNotExist:
+        logger.error(f"No enrollment found for student_id={student_id}, level_id={level_id}, academic_year_id={academic_year_id}")
+        return 'INCOMPLETE'
+    except Exception as e:
+        logger.error(f"Error determining pass/fail for student {student_id}: {str(e)}")
+        return 'INCOMPLETE'
 
 def update_grades(level_id, subject_id, period_id, grades, academic_year):
     """
@@ -118,6 +148,9 @@ def update_grades(level_id, subject_id, period_id, grades, academic_year):
             affected_student_ids.append(student_id)
             logger.info(f"Updated grade: id={grade.id}, enrollment_id={enrollment.id}, subject_id={subject_id}, period_id={period_id}, score={score}")
 
+            # Recalculate pass/fail status after grade update
+            determine_pass_fail(student_id, level_id, academic_year_obj.id)
+
         if updated_grades:
             StudentGradeSheetPDF.objects.filter(
                 level_id=level_id,
@@ -146,4 +179,10 @@ def update_grades(level_id, subject_id, period_id, grades, academic_year):
         return {
             "response": {"error": f"Invalid academic year: {academic_year}"},
             "status": 400
+        }
+    except Exception as e:
+        logger.error(f"Error updating grades: {str(e)}")
+        return {
+            "response": {"error": f"Internal server error: {str(e)}"},
+            "status": 500
         }

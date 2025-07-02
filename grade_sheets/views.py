@@ -260,8 +260,8 @@ def gradesheet_view(request):
         return render(request, 'grade_sheets/gradesheet_view.html', {
             'gradesheet': gradesheet,
             'level_name': level_name,
-            'level_id': level_id,
-            'academic_year': academic_year
+            'selected_level_id': level_id,
+            'selected_academic_year': academic_year
         })
     except Exception as e:
         logger.error(f"Error in gradesheet_view: {str(e)}")
@@ -344,6 +344,54 @@ def input_grades_view(request):
             return redirect('gradesheet-home')
 
     return redirect('gradesheet-home')
+
+def periodic_pdf(request):
+    """Render periodic PDF page."""
+    levels = get_all_levels()
+    academic_years = AcademicYear.objects.all()
+    selected_academic_year = request.GET.get('academic_year')
+    selected_level_id = request.GET.get('level_id')
+    students = []
+    selected_level_name = None
+
+    if selected_academic_year and selected_level_id:
+        students = get_students_by_level(selected_level_id)
+        level = get_level_by_id(selected_level_id)
+        selected_level_name = level.name if level else None
+        students = students.filter(enrollment__academic_year__name=selected_academic_year).distinct()
+
+    return render(request, 'grade_sheets/periodic_pdf.html', {
+        'levels': levels,
+        'academic_years': academic_years,
+        'students': students,
+        'selected_level_id': selected_level_id,
+        'selected_level_name': selected_level_name,
+        'selected_academic_year': selected_academic_year
+    })
+
+def yearly_pdf(request):
+    """Render yearly PDF page."""
+    levels = get_all_levels()
+    academic_years = AcademicYear.objects.all()
+    selected_academic_year = request.GET.get('academic_year')
+    selected_level_id = request.GET.get('level_id')
+    students = []
+    selected_level_name = None
+
+    if selected_academic_year and selected_level_id:
+        students = get_students_by_level(selected_level_id)
+        level = get_level_by_id(selected_level_id)
+        selected_level_name = level.name if level else None
+        students = students.filter(enrollment__academic_year__name=selected_academic_year).distinct()
+
+    return render(request, 'grade_sheets/yearly_pdf.html', {
+        'levels': levels,
+        'academic_years': academic_years,
+        'students': students,
+        'selected_level_id': selected_level_id,
+        'selected_level_name': selected_level_name,
+        'selected_academic_year': selected_academic_year
+    })
 
 def cors_test(request):
     """Test CORS configuration."""

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gradesheet System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="/static/css/bomi.css">
     <style>
         .form-select:invalid { color: #6c757d; }
         .alert-dismissible { position: relative; padding-right: 4rem; }
@@ -13,7 +14,14 @@
 </head>
 <body>
     <div class="container mt-4">
-        <h1 class="mb-4">Gradesheet System</h1>
+        <h1 class="mb-4 bomi-heading">Gradesheet System</h1>
+
+        <!-- Navigation Links -->
+        <div class="mb-4">
+            <a href="{% url 'periodic-pdf' %}" class="btn btn-info bomi-button">Periodic PDF Generator</a>
+            <a href="{% url 'yearly-pdf' %}" class="btn btn-info bomi-button">Yearly PDF Generator</a>
+            <a href="{% url 'gradesheet' %}" class="btn btn-secondary bomi-button">View Grades</a>
+        </div>
 
         <!-- Display Messages -->
         {% if messages %}
@@ -53,7 +61,7 @@
 
         <!-- Grade Input Form -->
         {% if students and selected_level_id %}
-            <h2 class="mt-4">Grade Input for {{ selected_level_name }}</h2>
+            <h2 class="mt-4 bomi-subheading">Grade Input for {{ selected_level_name }}</h2>
             <form method="POST" action="{% url 'input_grades' %}" id="grade-input-form">
                 {% csrf_token %}
                 <input type="hidden" name="level_id" value="{{ selected_level_id }}">
@@ -107,23 +115,13 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary">Save Grades</button>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="submit" class="btn btn-primary bomi-button">Save Grades</button>
                     <a
                         href="{% url 'gradesheet' %}?level_id={{ selected_level_id|default:'' }}&academic_year={{ selected_academic_year|default:'' }}"
-                        class="btn btn-secondary {% if not selected_level_id %}btn-disabled{% endif %}"
+                        class="btn btn-secondary bomi-button {% if not selected_level_id %}btn-disabled{% endif %}"
                         {% if not selected_level_id %}aria-disabled="true"{% endif %}
                     >View Gradesheet</a>
-                    {% if selected_level_id %}
-                        <button
-                            type="button"
-                            class="btn btn-info"
-                            id="generate-pdf-btn"
-                            data-level-id="{{ selected_level_id }}"
-                            data-academic-year="{{ selected_academic_year }}"
-                            {% if not selected_academic_year %}disabled{% endif %}
-                        >Generate PDF</button>
-                    {% endif %}
                 </div>
             </form>
         {% else %}
@@ -153,7 +151,6 @@
             const gradeInputs = document.querySelectorAll('input[name^="grades"]');
             let hasGrades = false;
 
-            // Check if at least one grade is entered
             gradeInputs.forEach(input => {
                 if (input.value && parseInt(input.value) >= 0 && parseInt(input.value) <= 100) {
                     hasGrades = true;
@@ -164,43 +161,12 @@
                 }
             });
 
-            // Validate required fields
             if (!subjectSelect.value || !periodSelect.value) {
                 e.preventDefault();
                 alert('Please select a subject and period.');
             } else if (!hasGrades) {
                 e.preventDefault();
                 alert('Please enter at least one valid grade.');
-            }
-        });
-
-        // Handle PDF generation
-        document.getElementById('generate-pdf-btn')?.addEventListener('click', async function() {
-            const button = this;
-            const levelId = button.dataset.levelId;
-            const academicYear = button.dataset.academicYear;
-            button.disabled = true;
-            button.textContent = 'Generating...';
-
-            try {
-                const response = await fetch(`/api/grade_sheets/gradesheet/pdf/generate/?level_id=${levelId}&academic_year=${encodeURIComponent(academicYear)}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1],
-                    },
-                });
-                const data = await response.json();
-                if (response.ok && data.view_url) {
-                    window.open(data.view_url, '_blank');
-                    alert('PDF generated successfully!');
-                } else {
-                    throw new Error(data.error || 'Failed to generate PDF');
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Generate PDF';
             }
         });
     </script>

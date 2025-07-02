@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yearly PDF Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="/static/css/bomi.css">
+    <style>
+        .form-select:invalid { color: #6c757d; }
+        .alert-dismissible { position: relative; padding-right: 4rem; }
+        .btn-disabled { pointer-events: none; opacity: 0.65; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4 bomi-heading">Yearly PDF Generator</h1>
+
+        <!-- Navigation Links -->
+        <div class="mb-4">
+            <a href="{% url 'gradesheet-home' %}" class="btn btn-primary bomi-button">Grade Input</a>
+            <a href="{% url 'gradesheet' %}" class="btn btn-secondary bomi-button">View Grades</a>
+            <a href="{% url 'periodic-pdf' %}" class="btn btn-info bomi-button">Periodic PDF Generator</a>
+        </div>
+
+        <!-- Level and Academic Year Selection -->
+        <form method="GET" class="mb-4" id="selection-form">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="level_id" class="form-label">Select Level:</label>
+                    <select name="level_id" id="level_id" class="form-select" required>
+                        <option value="" disabled selected>Choose a level</option>
+                        {% for level in levels %}
+                            <option value="{{ level.id }}" {% if level.id|stringformat:'s' == selected_level_id|stringformat:'s' %}selected{% endif %}>{{ level.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="academic_year" class="form-label">Select Academic Year:</label>
+                    <select name="academic_year" id="academic_year" class="form-select" required>
+                        <option value="" disabled selected>Choose an academic year</option>
+                        {% for year in academic_years %}
+                            <option value="{{ year.name }}" {% if year.name == selected_academic_year %}selected{% endif %}>{{ year.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </form>
+
+        <!-- Student Yearly PDF Form -->
+        {% if students and selected_level_id and selected_academic_year %}
+            <div class="mb-4">
+                <h2 class="bomi-subheading">Generate Student Yearly PDF</h2>
+                <form id="student-yearly-pdf-form" class="row g-3">
+                    <div class="col-md-12">
+                        <label for="student_id" class="form-label">Select Student:</label>
+                        <select id="student_id" class="form-select" required>
+                            <option value="" disabled selected>Choose a student</option>
+                            {% for student in students %}
+                                <option value="{{ student.id }}">{{ student.firstName }} {{ student.lastName }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button type="button" class="btn btn-info bomi-button" id="generate-student-yearly-pdf-btn" data-level-id="{{ selected_level_id }}" data-academic-year="{{ selected_academic_year }}">Generate Student Yearly PDF</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Level Yearly PDF Form -->
+            <div class="mb-4">
+                <h2 class="bomi-subheading">Generate Level Yearly PDF by Status</h2>
+                <form id="level-yearly-pdf-form" class="row g-3">
+                    <div class="col-12">
+                        <button type="button" class="btn btn-success bomi-button" id="generate-level-pass-pdf-btn" data-level-id="{{ selected_level_id }}" data-academic-year="{{ selected_academic_year }}" data-status="PASS">Generate PASS PDF</button>
+                        <button type="button" class="btn btn-warning bomi-button" id="generate-level-conditional-pdf-btn" data-level-id="{{ selected_level_id }}" data-academic-year="{{ selected_academic_year }}" data-status="CONDITIONAL">Generate CONDITIONAL PDF</button>
+                        <button type="button" class="btn btn-danger bomi-button" id="generate-level-fail-pdf-btn" data-level-id="{{ selected_level_id }}" data-academic-year="{{ selected_academic_year }}" data-status="FAIL">Generate FAIL PDF</button>
+                    </div>
+                </form>
+            </div>
+        {% else %}
+            <div class="alert alert-warning mt-4">Please select a level and academic year to generate PDFs.</div>
+        {% endif %}
+
+        <!-- Result Display -->
+        <div id="result" class="mt-3"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script>
+        // Auto-submit form on level or academic year change
+        document.querySelectorAll('#level_id, #academic_year').forEach(select => {
+            select.addEventListener('change', function() {
+                const form = document.getElementById('selection-form');
+                const levelSelect = document.getElementById('level_id');
+                const academicYearSelect = document.getElementById('academic_year');
+                if (levelSelect.value && academicYearSelect.value) {
+                    form.submit();
+                }
+            });
+        });
+
+        // Generate Student Yearly PDF
+        document.getElementById('generate-student-yearly-pdf-btn')?.addEventListener('click', async function() {
+            const button = this;
+            const studentId = document.getElementById('student_id').value;
+            const levelId = button.dataset.levelId;
+            const academicYear = button.dataset.academicYear;
+            const resultDiv = document.getElementById('result');
+
+            if (!studentId || !levelId || !academicYear) {
+                resultDiv.innerHTML = '<div class="alert alert-danger alert-dismissible fade show" role="alert">Please select a student, level, and academic year.<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = 'Generating...';
+
+            try {
+                const response = await fetch(`/api/grade_sheets_pdf/yearly/pdf/generate/?level_id=${levelId}&student_id=${studentId}&academic_year=${encodeURIComponent(academicYear)}`, {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+                    },
+                });
+                const data = await response.json();
+                if (response.ok && data.view_url) {
+                    window.open(data.view_url, '_blank');
+                    resultDiv.innerHTML = `<div class="alert alert-success alert-dismissible fade show" role="alert">${data.message}: <a href="${data.view_url}" target="_blank">Download</a><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+                } else {
+                    throw new Error(data.error || 'Failed to generate student yearly PDF');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert alert-danger alert-dismissible fade show" role="alert">Error: ${error.message}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Generate Student Yearly PDF';
+            }
+        });
+
+        // Generate Level Yearly PDF by Status
+        ['pass', 'conditional', 'fail'].forEach(status => {
+            document.getElementById(`generate-level-${status}-pdf-btn`)?.addEventListener('click', async function() {
+                const button = this;
+                const levelId = button.dataset.levelId;
+                const academicYear = button.dataset.academicYear;
+                const statusValue = button.dataset.status;
+                const resultDiv = document.getElementById('result');
+
+                if (!levelId || !academicYear) {
+                    resultDiv.innerHTML = '<div class="alert alert-danger alert-dismissible fade show" role="alert">Please select a level and academic year.<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+                    return;
+                }
+
+                button.disabled = true;
+                button.textContent = 'Generating...';
+
+                try {
+                    const response = await fetch(`/api/grade_sheets_pdf/yearly/pdf/generate/?level_id=${levelId}&academic_year=${encodeURIComponent(academicYear)}&status=${statusValue}`, {
+                        method: 'GET',
+                        headers: {
+                            'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+                        },
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.view_url) {
+                        window.open(data.view_url, '_blank');
+                        resultDiv.innerHTML = `<div class="alert alert-success alert-dismissible fade show" role="alert">${data.message}: <a href="${data.view_url}" target="_blank">Download</a><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+                    } else {
+                        throw new Error(data.error || `Failed to generate ${statusValue} level yearly PDF`);
+                    }
+                } catch (error) {
+                    resultDiv.innerHTML = `<div class="alert alert-danger alert-dismissible fade show" role="alert">Error: ${error.message}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+                } finally {
+                    button.disabled = false;
+                    button.textContent = `Generate ${statusValue} PDF`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

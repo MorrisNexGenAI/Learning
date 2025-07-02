@@ -5,7 +5,8 @@ from django.conf import settings
 from grade_sheets.helpers import get_grade_sheet_data
 from students.helper import get_students_by_level
 from docx2pdf import convert
-from grade_sheets.periodic_pdf import replace_placeholders
+from grade_sheets.pdf_utils import replace_placeholders
+import pythoncom
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ def generate_periodic_level_pdf(template_path, level_id, academic_year_id):
             for element in template_doc.element.body:
                 combined_doc.element.body.append(element)
 
-            # Add page break between students (except for the last one)
+            # Add page break between students (except for the first one)
             if not first_student:
                 combined_doc.add_page_break()
             first_student = False
@@ -60,60 +61,22 @@ def generate_periodic_level_pdf(template_path, level_id, academic_year_id):
         combined_doc.save(temp_path)
         logger.info(f"Saved temporary combined DOCX: {temp_path}")
 
-        # Convert to PDF
-        pdf_filename = temp_filename.replace('.docx', '.pdf')
-        pdf_path = os.path.join(output_dir, pdf_filename)
-        convert(temp_path, pdf_path)
-        if os.path.exists(pdf_path):
-            logger.info(f"PDF generated for level {level_id}: {pdf_path}")
-            return [pdf_path]
-        else:
-            logger.error(f"PDF not created at {pdf_path}")
-            return []
+        # Initialize COM for docx2pdf
+        pythoncom.CoInitialize()
+        try:
+            # Convert to PDF
+            pdf_filename = temp_filename.replace('.docx', '.pdf')
+            pdf_path = os.path.join(output_dir, pdf_filename)
+            convert(temp_path, pdf_path)
+            if os.path.exists(pdf_path):
+                logger.info(f"PDF generated for level {level_id}: {pdf_path}")
+                return [pdf_path]
+            else:
+                logger.error(f"PDF not created at {pdf_path}")
+                return []
+        finally:
+            pythoncom.CoUninitialize()
 
     except Exception as e:
         logger.error(f"Error generating level grade PDF: {str(e)}")
         return []
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
