@@ -92,6 +92,12 @@ DATABASES = {
 }
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
 
+
+CORS_ALLOW_CREDENTIALS = True
+
+CSRF_COOKIE_HTTPONLY = False  # Ensure JavaScript can read the CSRF cookie
+CSRF_COOKIE_SECURE = False
+
 REST_FRAMEWORK = {
     'DATE_INPUT_FORMATS': ['%Y-%m-%d'],
     'DEFAULT_RENDERER_CLASSES': [

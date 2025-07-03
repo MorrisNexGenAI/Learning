@@ -16,6 +16,8 @@ from grades.models import Grade
 from .listLevelHelper import build_gradesheet
 from academic_years.models import AcademicYear
 from .utils import update_grades
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
 
@@ -396,3 +398,8 @@ def yearly_pdf(request):
 def cors_test(request):
     """Test CORS configuration."""
     return Response({"message": "CORS test successful"}, status=status.HTTP_200_OK)
+
+@ensure_csrf_cookie
+def get_csrf_token(request):
+    """GET /api/csrf/ - Sets the CSRF token cookie and returns a 200 response."""
+    return HttpResponse(status=200)
