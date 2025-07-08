@@ -1,4 +1,5 @@
 import logging
+import os
 from django.conf import settings
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -8,7 +9,7 @@ from .models import PassFailedStatus
 from academic_years.models import AcademicYear
 from .helper import handle_validate_status, initialize_missing_statuses
 from grade_sheets.yearly_pdf import generate_yearly_pdf
-from grade_sheets.models import StudentGradeSheetPDF  # Changed from GradeSheetPDF
+from grade_sheets.models import StudentGradeSheetPDF
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class PassFailedStatusViewSet(viewsets.ModelViewSet):
                 logger.error(f"Academic year {academic_year} not found")
                 return PassFailedStatus.objects.none()
 
-        return queryset
+        return queryset.order_by('id')  # Ensure consistent pagination
 
     @action(detail=True, methods=['POST'], url_path='validate')
     def validate_status(self, request, pk=None):
@@ -48,7 +49,8 @@ class PassFailedStatusViewSet(viewsets.ModelViewSet):
                 level_id=status_obj.level.id,
                 student_id=status_obj.student.id,
                 pass_template=pass_template,
-                academic_year=status_obj.academic_year.name
+                conditional=status_obj.status == 'CONDITIONAL',
+                academic_year_id=status_obj.academic_year.id  # Use numeric ID
             )
 
             if not pdf_paths:
@@ -57,7 +59,7 @@ class PassFailedStatusViewSet(viewsets.ModelViewSet):
 
             pdf_path = pdf_paths[0]
             pdf_filename = os.path.basename(pdf_path)
-            StudentGradeSheetPDF.objects.update_or_create(  # Changed from GradeSheetPDF
+            StudentGradeSheetPDF.objects.update_or_create(
                 level_id=status_obj.level.id,
                 student_id=status_obj.student.id,
                 academic_year=status_obj.academic_year,

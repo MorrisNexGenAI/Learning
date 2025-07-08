@@ -11,7 +11,7 @@ from enrollment.models import Enrollment
 from .models import LevelGradeSheetPDF
 from academic_years.models import AcademicYear
 from datetime import datetime
-from .yearly_student_pdf import replace_placeholders
+from .pdf_utils import replace_placeholders
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,8 @@ def generate_yearly_level_pdf(level_id, academic_year):
             academic_year=AcademicYear.objects.get(name=academic_year),
             pdf_path=merged_pdf_path,
             filename=os.path.basename(merged_pdf_path),
-            created_at=datetime.now()
+            created_at=datetime.now(),
+            is_yearly=True  
         )
 
         for temp_pdf_path in temp_pdf_paths:

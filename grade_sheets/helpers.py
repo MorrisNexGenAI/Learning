@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def get_grade_sheet_data(student_id, level_id, academic_year_id=None):
+def get_grade_sheet_data(student_id, level_id, academic_year_id=None, is_yearly=False):
     """Compile grade data for a student, level, and optional academic year."""
     try:
         enrollment = Enrollment.objects.get(student_id=student_id, level_id=level_id, academic_year_id=academic_year_id)
@@ -22,7 +22,7 @@ def get_grade_sheet_data(student_id, level_id, academic_year_id=None):
             'level': enrollment.level.name,
             'academic_year': enrollment.academic_year.name,
             's': [],
-            'status': determine_pass_fail(student_id, level_id, academic_year_id)
+            'status': determine_pass_fail(student_id, level_id, academic_year_id) if is_yearly else 'N/A'
         }
 
         for subject in subjects:

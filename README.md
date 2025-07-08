@@ -73,11 +73,11 @@ Django REST Framework: API creation
 
 pywin32: Word and PDF conversion via Windows COM interface (no WeasyPrint used)
 
-Helper modules: Custom business logic per app
+Utils,Helper modules: Custom business logic per app
 
 PDF generation: Uses .docx templates, converted to .pdf based on student pass/fail status
 
-Custom api/ routing: All endpoints grouped in students/api/
+Custom api/ routing: All endpoints grouped in system/urls
 
 🌐 Frontend – React + TypeScript
 Built with reusability in mind and structured around school-specific themes.

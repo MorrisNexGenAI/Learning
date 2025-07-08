@@ -22,22 +22,40 @@ class GradeSheetViewSet(viewsets.ViewSet):
         """GET /api/grade_sheets_pdf/gradesheet/pdf/generate/ - Generate periodic PDFs."""
         level_id = request.query_params.get('level_id')
         academic_year = request.query_params.get('academic_year')
+        academic_year_id = request.query_params.get('academic_year_id')
         student_id = request.query_params.get('student_id')
 
-        logger.info(f"Received request for periodic PDF: level_id={level_id}, academic_year={academic_year}, student_id={student_id}")
+        logger.info(f"Received request for periodic PDF: level_id={level_id}, academic_year={academic_year}, academic_year_id={academic_year_id}, student_id={student_id}")
 
         try:
-            if not level_id or not academic_year:
-                logger.error("Missing required parameters: level_id or academic_year")
-                return Response({"error": "level_id and academic_year are required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not level_id or (not academic_year and not academic_year_id):
+                logger.error("Missing required parameters: level_id or both academic_year and academic_year_id")
+                return Response({"error": "level_id and either academic_year or academic_year_id are required"}, status=status.HTTP_400_BAD_REQUEST)
 
             level = get_level_by_id(level_id)
             if not level:
                 logger.error(f"Invalid level_id: {level_id}")
                 return Response({"error": f"Invalid level_id: {level_id}"}, status=status.HTTP_400_BAD_REQUEST)
 
-            academic_year_obj = AcademicYear.objects.get(name=academic_year)
-            logger.info(f"Found academic year: {academic_year_obj.name} (ID: {academic_year_obj.id})")
+            # Resolve academic_year_obj from either academic_year or academic_year_id
+            if academic_year:
+                try:
+                    academic_year_obj = AcademicYear.objects.get(name=academic_year)
+                    academic_year_id = academic_year_obj.id
+                except AcademicYear.DoesNotExist:
+                    logger.error(f"Invalid academic year: {academic_year}")
+                    return Response({"error": f"Invalid academic year: {academic_year}"}, status=status.HTTP_400_BAD_REQUEST)
+            elif academic_year_id:
+                try:
+                    academic_year_obj = AcademicYear.objects.get(id=academic_year_id)
+                except AcademicYear.DoesNotExist:
+                    logger.error(f"Invalid academic year ID: {academic_year_id}")
+                    return Response({"error": f"Invalid academic year ID: {academic_year_id}"}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                logger.error("No academic year information provided")
+                return Response({"error": "Either academic_year or academic_year_id must be provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+            logger.info(f"Resolved academic year: {academic_year_obj.name} (ID: {academic_year_obj.id})")
 
             model = StudentGradeSheetPDF if student_id else LevelGradeSheetPDF
             filter_kwargs = {
@@ -81,8 +99,8 @@ class GradeSheetViewSet(viewsets.ViewSet):
             logger.info(f"generate_gradesheet_pdf returned: {pdf_paths}")
 
             if not pdf_paths:
-                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year={academic_year}")
-                return Response({"error": "No PDFs generated"}, status=status.HTTP_404_NOT_FOUND)
+                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year_id={academic_year_id}")
+                return Response({"error": f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year_id={academic_year_id}"}, status=status.HTTP_400_BAD_REQUEST)
 
             for pdf_path in pdf_paths:
                 pdf_filename = os.path.basename(pdf_path)
@@ -105,8 +123,8 @@ class GradeSheetViewSet(viewsets.ViewSet):
             })
 
         except AcademicYear.DoesNotExist:
-            logger.error(f"Invalid academic year: {academic_year}")
-            return Response({"error": f"Invalid academic year: {academic_year}"}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error(f"Invalid academic year or ID: academic_year={academic_year}, academic_year_id={academic_year_id}")
+            return Response({"error": f"Invalid academic year or ID: academic_year={academic_year}, academic_year_id={academic_year_id}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Error generating PDF: {str(e)}", exc_info=True)
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -117,20 +135,47 @@ class GradeSheetViewSet(viewsets.ViewSet):
         level_id = request.query_params.get('level_id')
         student_id = request.query_params.get('student_id')
         academic_year = request.query_params.get('academic_year')
+        academic_year_id = request.query_params.get('academic_year_id')
+        pass_template = request.query_params.get('pass_template', 'true').lower() == 'true'
+        conditional = request.query_params.get('conditional', 'false').lower() == 'true'
+
+        logger.info(f"Received request for yearly PDF: level_id={level_id}, student_id={student_id}, academic_year={academic_year}, academic_year_id={academic_year_id}, pass_template={pass_template}, conditional={conditional}")
 
         try:
-            if not level_id or not academic_year:
-                return Response({"error": "level_id and academic_year are required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not level_id or (not academic_year and not academic_year_id):
+                logger.error("Missing required parameters: level_id or both academic_year and academic_year_id")
+                return Response({"error": "level_id and either academic_year or academic_year_id are required"}, status=status.HTTP_400_BAD_REQUEST)
 
             level = get_level_by_id(level_id)
             if not level:
+                logger.error(f"Invalid level_id: {level_id}")
                 return Response({"error": f"Invalid level_id: {level_id}"}, status=status.HTTP_400_BAD_REQUEST)
 
-            academic_year_obj = AcademicYear.objects.get(name=academic_year)
+            # Resolve academic_year_obj from either academic_year or academic_year_id
+            if academic_year:
+                try:
+                    academic_year_obj = AcademicYear.objects.get(name=academic_year)
+                    academic_year_id = academic_year_obj.id
+                except AcademicYear.DoesNotExist:
+                    logger.error(f"Invalid academic year: {academic_year}")
+                    return Response({"error": f"Invalid academic year: {academic_year}"}, status=status.HTTP_400_BAD_REQUEST)
+            elif academic_year_id:
+                try:
+                    academic_year_obj = AcademicYear.objects.get(id=academic_year_id)
+                except AcademicYear.DoesNotExist:
+                    logger.error(f"Invalid academic year ID: {academic_year_id}")
+                    return Response({"error": f"Invalid academic year ID: {academic_year_id}"}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                logger.error("No academic year information provided")
+                return Response({"error": "Either academic_year or academic_year_id must be provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+            logger.info(f"Resolved academic year: {academic_year_obj.name} (ID: {academic_year_obj.id})")
+
             student = None
             if student_id:
                 student = get_students_by_level(level_id).filter(id=student_id).first()
                 if not student:
+                    logger.error(f"Invalid student_id: {student_id}")
                     return Response({"error": f"Invalid student_id: {student_id}"}, status=status.HTTP_400_BAD_REQUEST)
 
             model = StudentGradeSheetPDF if student_id else LevelGradeSheetPDF
@@ -154,6 +199,7 @@ class GradeSheetViewSet(viewsets.ViewSet):
                     pdf_query.delete()
                 elif os.path.exists(pdf_record.pdf_path):
                     absolute_url = request.build_absolute_uri(f"{settings.MEDIA_URL}{pdf_record.pdf_path.replace(os.sep, '/')}")
+                    logger.info(f"Returning existing PDF: {absolute_url}")
                     return Response({
                         "message": "PDF retrieved successfully",
                         "view_url": absolute_url,
@@ -163,12 +209,14 @@ class GradeSheetViewSet(viewsets.ViewSet):
             pdf_paths = generate_yearly_gradesheet_pdf(
                 level_id=int(level_id),
                 student_id=int(student_id) if student_id else None,
-                academic_year=academic_year
+                pass_template=pass_template,
+                conditional=conditional,
+                academic_year_id=academic_year_id
             )
 
             if not pdf_paths:
-                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year={academic_year}")
-                return Response({"error": "No PDFs generated"}, status=status.HTTP_404_NOT_FOUND)
+                logger.warning(f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year_id={academic_year_id}, pass_template={pass_template}, conditional={conditional}")
+                return Response({"error": f"No PDFs generated for level_id={level_id}, student_id={student_id}, academic_year_id={academic_year_id}"}, status=status.HTTP_400_BAD_REQUEST)
 
             for pdf_path in pdf_paths:
                 pdf_filename = os.path.basename(pdf_path)
@@ -183,6 +231,7 @@ class GradeSheetViewSet(viewsets.ViewSet):
             pdf_filename = os.path.basename(pdf_path)
             relative_pdf_path = os.path.join('output_gradesheets', pdf_filename)
             absolute_url = request.build_absolute_uri(f"{settings.MEDIA_URL}{relative_pdf_path.replace(os.sep, '/')}")
+            logger.info(f"Generated PDF: {absolute_url}")
             return Response({
                 "message": "PDF generated successfully",
                 "view_url": absolute_url,
@@ -190,10 +239,10 @@ class GradeSheetViewSet(viewsets.ViewSet):
             })
 
         except AcademicYear.DoesNotExist:
-            logger.error(f"Invalid academic year: {academic_year}")
-            return Response({"error": f"Invalid academic year: {academic_year}"}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error(f"Invalid academic year or ID: academic_year={academic_year}, academic_year_id={academic_year_id}")
+            return Response({"error": f"Invalid academic year or ID: academic_year={academic_year}, academic_year_id={academic_year_id}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"Error generating yearly PDF: {str(e)}")
+            logger.error(f"Error generating yearly PDF: {str(e)}", exc_info=True)
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['GET'], url_path='gradesheet/pdf/view')
@@ -202,16 +251,42 @@ class GradeSheetViewSet(viewsets.ViewSet):
         level_id = request.query_params.get('level_id')
         student_id = request.query_params.get('student_id')
         academic_year = request.query_params.get('academic_year')
+        academic_year_id = request.query_params.get('academic_year_id')
+        pass_template = request.query_params.get('pass_template', 'true').lower() == 'true'
+        conditional = request.query_params.get('conditional', 'false').lower() == 'true'
+
+        logger.info(f"Received request to view PDF: level_id={level_id}, student_id={student_id}, academic_year={academic_year}, academic_year_id={academic_year_id}")
 
         try:
-            if not level_id or not academic_year:
-                return Response({"error": "level_id and academic_year are required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not level_id or (not academic_year and not academic_year_id):
+                logger.error("Missing required parameters: level_id or both academic_year and academic_year_id")
+                return Response({"error": "level_id and either academic_year or academic_year_id are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-            academic_year_obj = AcademicYear.objects.get(name=academic_year)
+            # Resolve academic_year_obj from either academic_year or academic_year_id
+            if academic_year:
+                try:
+                    academic_year_obj = AcademicYear.objects.get(name=academic_year)
+                    academic_year_id = academic_year_obj.id
+                except AcademicYear.DoesNotExist:
+                    logger.error(f"Invalid academic year: {academic_year}")
+                    return Response({"error": f"Invalid academic year: {academic_year}"}, status=status.HTTP_400_BAD_REQUEST)
+            elif academic_year_id:
+                try:
+                    academic_year_obj = AcademicYear.objects.get(id=academic_year_id)
+                except AcademicYear.DoesNotExist:
+                    logger.error(f"Invalid academic year ID: {academic_year_id}")
+                    return Response({"error": f"Invalid academic year ID: {academic_year_id}"}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                logger.error("No academic year information provided")
+                return Response({"error": "Either academic_year or academic_year_id must be provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+            logger.info(f"Resolved academic year: {academic_year_obj.name} (ID: {academic_year_obj.id})")
+
             student = None
             if student_id:
                 student = get_students_by_level(level_id).filter(id=student_id).first()
                 if not student:
+                    logger.error(f"Invalid student_id: {student_id}")
                     return Response({"error": f"Invalid student_id: {student_id}"}, status=status.HTTP_400_BAD_REQUEST)
 
             model = StudentGradeSheetPDF if student_id else LevelGradeSheetPDF
@@ -224,8 +299,8 @@ class GradeSheetViewSet(viewsets.ViewSet):
 
             pdf_query = model.objects.filter(**filter_kwargs)
             if not pdf_query.exists():
-                logger.warning(f"No PDF record found for level_id={level_id}, student_id={student_id}, academic_year={academic_year}")
-                return Response({"error": "PDF not found"}, status=status.HTTP_404_NOT_FOUND)
+                logger.warning(f"No PDF record found for level_id={level_id}, student_id={student_id}, academic_year_id={academic_year_id}")
+                return Response({"error": "PDF not found"}, status=status.HTTP_400_BAD_REQUEST)
 
             pdf_record = pdf_query.first()
             pdf_path = os.path.join(settings.MEDIA_ROOT, pdf_record.pdf_path)
@@ -242,7 +317,9 @@ class GradeSheetViewSet(viewsets.ViewSet):
                     generate_yearly_gradesheet_pdf(
                         level_id=int(level_id),
                         student_id=int(student_id) if student_id else None,
-                        academic_year=academic_year
+                        pass_template=pass_template,
+                        conditional=conditional,
+                        academic_year_id=academic_year_id
                     ) if 'yearly' in pdf_record.pdf_path else
                     generate_gradesheet_pdf(
                         level_id=int(level_id),
@@ -251,7 +328,7 @@ class GradeSheetViewSet(viewsets.ViewSet):
                     )
                 )
                 if not pdf_paths:
-                    return Response({"error": "Failed to re-generate PDF"}, status=status.HTTP_404_NOT_FOUND)
+                    return Response({"error": "Failed to re-generate PDF"}, status=status.HTTP_400_BAD_REQUEST)
                 pdf_path = pdf_paths[0]
                 pdf_filename = os.path.basename(pdf_path)
                 relative_pdf_path = os.path.join('output_gradesheets', pdf_filename)
@@ -267,7 +344,9 @@ class GradeSheetViewSet(viewsets.ViewSet):
                     generate_yearly_gradesheet_pdf(
                         level_id=int(level_id),
                         student_id=int(student_id) if student_id else None,
-                        academic_year=academic_year
+                        pass_template=pass_template,
+                        conditional=conditional,
+                        academic_year_id=academic_year_id
                     ) if 'yearly' in pdf_path else
                     generate_gradesheet_pdf(
                         level_id=int(level_id),
@@ -276,7 +355,7 @@ class GradeSheetViewSet(viewsets.ViewSet):
                     )
                 )
                 if not pdf_paths:
-                    return Response({"error": "Failed to re-generate PDF"}, status=status.HTTP_404_NOT_FOUND)
+                    return Response({"error": "Failed to re-generate PDF"}, status=status.HTTP_400_BAD_REQUEST)
                 pdf_path = pdf_paths[0]
                 pdf_filename = os.path.basename(pdf_path)
                 relative_pdf_path = os.path.join('output_gradesheets', pdf_filename)
@@ -293,8 +372,8 @@ class GradeSheetViewSet(viewsets.ViewSet):
                 return response
 
         except AcademicYear.DoesNotExist:
-            logger.error(f"Invalid academic year: {academic_year}")
-            return Response({"error": f"Invalid academic year: {academic_year}"}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error(f"Invalid academic year or ID: academic_year={academic_year}, academic_year_id={academic_year_id}")
+            return Response({"error": f"Invalid academic year or ID: academic_year={academic_year}, academic_year_id={academic_year_id}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"Error serving PDF: {str(e)}")
+            logger.error(f"Error serving PDF: {str(e)}", exc_info=True)
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

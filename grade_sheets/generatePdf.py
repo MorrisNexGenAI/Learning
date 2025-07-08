@@ -67,7 +67,7 @@ def generate_gradesheet_pdf(level_id, student_id=None, academic_year_id=None):
         logger.error(f"Error generating periodic PDF: {str(e)}")
         return []
 
-def generate_yearly_gradesheet_pdf(level_id, student_id=None, pass_template=True, conditional=False, academic_year=None):
+def generate_yearly_gradesheet_pdf(level_id, student_id=None, pass_template=True, conditional=False, academic_year_id=None):
     """
     Generate yearly report card PDFs by calling yearly_pdf.py.
     
@@ -76,14 +76,14 @@ def generate_yearly_gradesheet_pdf(level_id, student_id=None, pass_template=True
         student_id: ID of the student (optional).
         pass_template: Use pass template (default True).
         conditional: Use conditional template (default False).
-        academic_year: Academic year name (optional).
+        academic_year_id: ID of the academic year (optional).
     
     Returns:
         List of PDF paths.
     """
     try:
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        return generate_yearly_pdf(level_id, student_id, pass_template, conditional, academic_year)
+        return generate_yearly_pdf(level_id, student_id, pass_template, conditional, academic_year_id)
     except Exception as e:
         logger.error(f"Error generating yearly PDF: {str(e)}")
         return []
