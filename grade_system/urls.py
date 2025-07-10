@@ -13,6 +13,10 @@ from subjects.views import SubjectViewSet
 from periods.views import PeriodViewSet
 from academic_years.views import AcademicYearViewSet
 from pass_and_failed.views import PassFailedStatusViewSet
+from rest_framework_simplejwt.views import TokenObtainPairView 
+from rest_framework_simplejwt.views import TokenRefreshView
+
+
 
 router = DefaultRouter()
 router.register(r'grade_sheets', GradeSheetViewSet, basename='grade_sheets')
@@ -33,6 +37,8 @@ urlpatterns = [
     path('grade_sheets/yearly_pdf/', yearly_pdf, name='yearly-pdf'),
     path('api/grade_sheets/home/', gradesheet_home, name='gradesheet-home'),  # Renamed to avoid conflict
     path('api/grade_sheets/view/', gradesheet_view, name='gradesheet'),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('admin/', admin.site.urls),
     path('api/cors-test/', cors_test, name='cors-test'),
     path('api/csrf/', get_csrf_token, name='get_csrf_token'),

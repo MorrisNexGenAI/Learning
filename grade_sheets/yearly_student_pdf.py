@@ -10,7 +10,8 @@ from .models import StudentGradeSheetPDF
 from academic_years.models import AcademicYear
 from datetime import datetime
 from pathlib import Path
-from .pdf_utils import replace_placeholders
+from grade_sheets.pdf_utils import replace_placeholders
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,9 @@ def generate_yearly_student_pdf(student_id, level_id, academic_year_id, pass_tem
     """Generate PDF for a single student with yearly grades."""
     try:
         output_dir = Path(settings.MEDIA_ROOT) / 'output_gradesheets'
+        temp_dir = Path(settings.MEDIA_ROOT) / 'temp'
         output_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
         # Resolve academic_year name for template selection
         try:
@@ -81,7 +84,7 @@ def generate_yearly_student_pdf(student_id, level_id, academic_year_id, pass_tem
             logger.debug(f"Loaded template {template_path} with {len(doc.paragraphs)} paragraphs")
         except Exception as e:
             logger.error(f"Error loading template {template_path} with python-docx: {str(e)}")
-            # Fallback to periodic template for debugging
+            # Fallback to periodic template
             fallback_template = Path(settings.MEDIA_ROOT) / 'templates' / 'report_card.docx'
             if fallback_template.exists():
                 logger.info(f"Attempting fallback to periodic template: {fallback_template}")
@@ -98,31 +101,59 @@ def generate_yearly_student_pdf(student_id, level_id, academic_year_id, pass_tem
         doc = replace_placeholders(doc, student_data)
         student_name = student_data['name'].replace(' ', '_').replace(':', '_').replace('/', '_').replace('\\', '_')
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        docx_path = output_dir / f"yearly_card_{student_name}_{timestamp}.docx"
-        pdf_path = output_dir / f"yearly_card_{student_name}_{timestamp}.pdf"
+        temp_filename = f"temp_yearly_card_{student_name}_{academic_year_id}_{timestamp}.docx"
+        docx_path = temp_dir / temp_filename
+        pdf_filename = temp_filename.replace('.docx', '.pdf')
+        pdf_path = output_dir / pdf_filename
 
         doc.save(str(docx_path))
         logger.info(f"Saved .docx: {docx_path}")
 
-        pythoncom.CoInitialize()
-        try:
-            convert(str(docx_path), str(pdf_path))
-            logger.info(f"Converted to PDF: {pdf_path}")
-        finally:
-            pythoncom.CoUninitialize()
-
-        if not pdf_path.exists():
-            logger.error(f"PDF not created at {pdf_path}")
+        # Retry conversion up to 3 times to handle RPC errors
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            pythoncom.CoInitialize()
+            try:
+                convert(str(docx_path), str(pdf_path))
+                if pdf_path.exists():
+                    logger.info(f"Converted to PDF: {pdf_path}")
+                    break
+                else:
+                    logger.warning(f"PDF not created at {pdf_path} on attempt {attempt}")
+                    if attempt < max_attempts:
+                        time.sleep(2)  # Wait before retry
+            except Exception as e:
+                logger.error(f"Conversion attempt {attempt} failed: {str(e)}")
+                if attempt < max_attempts:
+                    time.sleep(2)  # Wait before retry
+            finally:
+                pythoncom.CoUninitialize()
+        else:
+            logger.error(f"Failed to convert to PDF after {max_attempts} attempts")
             return []
 
-        StudentGradeSheetPDF.objects.create(
+        # Check for existing StudentGradeSheetPDF record
+        existing_pdf = StudentGradeSheetPDF.objects.filter(
             student_id=student_id,
             level_id=level_id,
-            academic_year=academic_year_obj,
-            pdf_path=str(pdf_path),
-            filename=pdf_path.name,
-            created_at=datetime.now()
-        )
+            academic_year_id=academic_year_id
+        ).first()
+        if existing_pdf:
+            logger.info(f"Existing PDF record found for student_id={student_id}, level_id={level_id}, academic_year_id={academic_year_id}. Updating.")
+            existing_pdf.pdf_path = str(pdf_path)
+            existing_pdf.filename = pdf_path.name
+            existing_pdf.created_at = datetime.now()
+            existing_pdf.save()
+        else:
+            StudentGradeSheetPDF.objects.create(
+                student_id=student_id,
+                level_id=level_id,
+                academic_year=academic_year_obj,
+                pdf_path=str(pdf_path),
+                filename=pdf_path.name,
+                created_at=datetime.now()
+            )
+            logger.info(f"Created new StudentGradeSheetPDF for student_id={student_id}, level_id={level_id}, academic_year_id={academic_year_id}")
 
         try:
             docx_path.unlink()

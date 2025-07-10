@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'grade_sheets',
     'academic_years',
     'pass_and_failed',
+    'rest_framework_simplejwt',
 ]
 
 MIDDLEWARE = [
@@ -99,6 +100,9 @@ CSRF_COOKIE_HTTPONLY = False  # Ensure JavaScript can read the CSRF cookie
 CSRF_COOKIE_SECURE = False
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES':(
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
     'DATE_INPUT_FORMATS': ['%Y-%m-%d'],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',

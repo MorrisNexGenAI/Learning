@@ -5,16 +5,20 @@ from grades.models import Grade
 from .models import Period
 from .serializers import PeriodSerializer
 from .helpers import get_all_periods, get_period_by_id
+from rest_framework.permissions import IsAuthenticated
 
 logger = logging.getLogger(__name__)
 
 class PeriodViewSet(viewsets.ViewSet):
+    """Authenitcation  """
+    permission_classes = [IsAuthenticated]
     """
     A ViewSet for managing periods.
     """
 
     def list(self, request):
         try:
+            periods = Period.objects.all()
             periods = get_all_periods()
             serializer = PeriodSerializer(periods, many=True)
             logger.debug(f"Fetched {len(periods)} periods")

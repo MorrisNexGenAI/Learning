@@ -2,23 +2,24 @@ from django.db import models
 
 class Period(models.Model):
     PERIOD_CHOICE = [
-        ('1st', '1st period'),
-        ('2nd', '2nd period'),
-        ('3rd', '3rd period'),
-        ('1exam', '1st semester exam'),
-        ('4th', '4th period'),
-        ('5th', '5th period'),
-        ('6th', '6th period'),
-        ('2exam', '2nd semester exam'),
+        ('1st', '1st Period'),
+        ('2nd', '2nd Period'),
+        ('3rd', '3rd Period'),
+        ('1exam', '1st Semester Exam'),
+        ('4th', '4th Period'),
+        ('5th', '5th Period'),
+        ('6th', '6th Period'),
+        ('2exam', '2nd Semester Exam'),
     ]
 
     period = models.CharField(
         max_length=9,
         choices=PERIOD_CHOICE,
-        unique=True,
         default='1st'
     )
     is_exam = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
         # Automatically infer is_exam based on period value
