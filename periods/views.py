@@ -10,8 +10,6 @@ from rest_framework.permissions import IsAuthenticated
 logger = logging.getLogger(__name__)
 
 class PeriodViewSet(viewsets.ViewSet):
-    """Authenitcation  """
-    permission_classes = [IsAuthenticated]
     """
     A ViewSet for managing periods.
     """

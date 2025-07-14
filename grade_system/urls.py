@@ -21,7 +21,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 router = DefaultRouter()
 router.register(r'grade_sheets', GradeSheetViewSet, basename='grade_sheets')
 router.register(r'grade_sheets_pdf', PDFGradeSheetViewSet, basename='grade_sheets_pdf')
-router.register(r'enrollment', EnrollmentViewSet, basename='enrollment')
+router.register(r'enrollments', EnrollmentViewSet, basename='enrollments')
 router.register(r'students', StudentViewSet, basename='student')
 router.register(r'subjects', SubjectViewSet, basename='subject')
 router.register(r'grades', GradeViewSet, basename='grade')
