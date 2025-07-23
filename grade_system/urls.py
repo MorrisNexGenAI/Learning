@@ -3,7 +3,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from grade_sheets.views import GradeSheetViewSet, gradesheet_home, input_grades_view, cors_test, periodic_pdf, yearly_pdf, get_csrf_token, gradesheet_view
+from grade_sheets.views import GradeSheetViewSet, input_grades_view, cors_test, periodic_pdf, yearly_pdf, get_csrf_token, gradesheet_view
 from grade_sheets.pdfView import GradeSheetViewSet as PDFGradeSheetViewSet
 from enrollment.views import EnrollmentViewSet
 from students.views import StudentViewSet
@@ -35,7 +35,6 @@ urlpatterns = [
     path('grade_sheets/input/', input_grades_view, name='input_grades'),
     path('grade_sheets/periodic_pdf/', periodic_pdf, name='periodic-pdf'),
     path('grade_sheets/yearly_pdf/', yearly_pdf, name='yearly-pdf'),
-    path('api/grade_sheets/home/', gradesheet_home, name='gradesheet-home'),  # Renamed to avoid conflict
     path('api/grade_sheets/view/', gradesheet_view, name='gradesheet'),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

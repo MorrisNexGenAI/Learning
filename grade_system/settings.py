@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     'grade_sheets',
     'academic_years',
     'pass_and_failed',
+    'evaluations',
+    'school_configs',
     'rest_framework_simplejwt',
 ]
 

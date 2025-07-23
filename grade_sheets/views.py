@@ -202,47 +202,6 @@ class GradeSheetViewSet(viewsets.ViewSet):
             logger.error(f"Error in check_enrollment: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def gradesheet_home(request):
-    """Render grade input home page."""
-    levels = get_all_levels()
-    academic_years = AcademicYear.objects.all()
-
-    selected_academic_year = request.GET.get('academic_year')
-    selected_level_id = request.GET.get('level_id')
-    students = []
-    subjects = []
-    periods = get_all_periods()
-    selected_level_name = None
-    selected_subject_id = request.GET.get('subject_id')
-    selected_period_id = request.GET.get('period_id')
-
-    if selected_academic_year and selected_level_id:
-        students = get_students_by_level(selected_level_id)
-        subjects = get_subjects_by_level(selected_level_id)
-        level = get_level_by_id(selected_level_id)
-        selected_level_name = level.name if level else None
-        students = students.filter(enrollment__academic_year__name=selected_academic_year).distinct()
-        if selected_subject_id and selected_period_id:
-            students_with_grades = Grade.objects.filter(
-                enrollment__level_id=selected_level_id,
-                subject_id=selected_subject_id,
-                period_id=selected_period_id
-            ).values_list('enrollment__student_id', flat=True)
-            students = [s for s in students if s.id not in students_with_grades]
-
-    return render(request, 'grade_sheets/gradesheet.html', {
-        'levels': levels,
-        'academic_years': academic_years,
-        'students': students,
-        'subjects': subjects,
-        'periods': periods,
-        'selected_level_id': selected_level_id,
-        'selected_level_name': selected_level_name,
-        'selected_subject_id': selected_subject_id,
-        'selected_period_id': selected_period_id,
-        'selected_academic_year': selected_academic_year
-    })
-
 def gradesheet_view(request):
     """Render grade sheet view page."""
     level_id = request.GET.get('level_id')

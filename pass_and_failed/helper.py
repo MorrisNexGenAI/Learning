@@ -1,5 +1,9 @@
+import datetime
+from venv import logger
 from rest_framework.response import Response
-from rest_framework import status
+from django.db import transaction
+
+from enrollment.utils import create_enrollment_for_student
 from .models import PassFailedStatus
 from enrollment.models import Enrollment
 from academic_years.models import AcademicYear
@@ -7,106 +11,8 @@ from grades.models import Grade
 from levels.models import Level
 from subjects.models import Subject
 from datetime import date, timedelta
+from evaluations.promotional_logics import promote_student_if_eligible
 
-def handle_validate_status(view, request, pk, logger):
-    try:
-        status_obj = view.get_object()
-        status_value = request.data.get('status')
-        validated_by = request.data.get('validated_by')
-
-        if status_value not in ['PASS', 'FAIL', 'CONDITIONAL', 'PENDING', 'INCOMPLETE']:
-            return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not status_obj.grades_complete and status_value in ['PASS', 'FAIL', 'CONDITIONAL']:
-            return Response({"error": "Grades incomplete"}, status=status.HTTP_200_OK)
-
-        status_obj.status = status_value
-        status_obj.validated_by = validated_by
-        status_obj.save()
-        logger.info(f"Status validated: {status_obj.id} as {status_value}")
-
-        if status_value in ['PASS', 'CONDITIONAL']:
-            promote_student_if_eligible(status_obj, logger)
-
-        serializer = view.get_serializer(status_obj)
-        return Response(serializer.data)
-
-    except Exception as e:
-        logger.error(f"Error validating status {pk}: {str(e)}")
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-def promote_student_if_eligible(status_obj, logger):
-    try:
-        current_level = status_obj.level
-        current_level_name = current_level.name
-        try:
-            current_level_number = int(current_level_name)  # Assume name is '1', '2', etc.
-            next_level_number = current_level_number + 1
-            next_level = Level.objects.filter(name=str(next_level_number)).first()
-        except (ValueError, TypeError):
-            logger.warning(f"Level name {current_level_name} is not numeric, cannot promote")
-            return
-
-        if not next_level:
-            logger.warning(f"No higher level found for promotion from level {current_level.id}")
-            return
-
-        # Get or create the next academic year
-        current_academic_year = status_obj.academic_year
-        try:
-            current_year = int(current_academic_year.name.split('/')[0])
-            next_year = current_year + 1
-            next_academic_year_name = f"{next_year}/{next_year + 1}"
-            next_academic_year, created = AcademicYear.objects.get_or_create(
-                name=next_academic_year_name,
-                defaults={
-                    'start_date': date(next_year, 9, 1),
-                    'end_date': date(next_year + 1, 6, 30)
-                }
-            )
-            if created:
-                logger.info(f"Created new AcademicYear: {next_academic_year_name}")
-        except (ValueError, TypeError):
-            logger.error(f"Cannot parse academic year {current_academic_year.name} for promotion")
-            return
-
-        current_enrollment = Enrollment.objects.filter(
-            student=status_obj.student,
-            level=current_level,
-            academic_year=current_academic_year
-        ).first()
-
-        if current_enrollment:
-            # Check if enrollment for next level and next academic year exists
-            next_enrollment = Enrollment.objects.filter(
-                student=status_obj.student,
-                level=next_level,
-                academic_year=next_academic_year
-            ).first()
-
-            if next_enrollment:
-                logger.info(f"Enrollment already exists for student {status_obj.student.id} at level {next_level.id}, academic_year {next_academic_year.name}")
-                # Update existing enrollment
-                next_enrollment.enrollment_status = 'ENROLLED'
-                next_enrollment.save()
-            else:
-                # Create new enrollment for next level and next academic year
-                Enrollment.objects.create(
-                    student=status_obj.student,
-                    level=next_level,
-                    academic_year=next_academic_year,
-                    date_enrolled=next_academic_year.start_date,
-                    enrollment_status='ENROLLED'
-                )
-                logger.info(f"Student {status_obj.student.id} auto-promoted to level {next_level.id}, academic_year {next_academic_year.name}")
-
-            # Update PassFailedStatus
-            status_obj.status = 'PASS' if status_obj.status == 'PASS' else 'CONDITIONAL'
-            status_obj.save()
-        else:
-            logger.warning(f"No current enrollment found for student {status_obj.student.id}")
-    except Exception as e:
-        logger.error(f"Error promoting student {status_obj.student.id}: {str(e)}")
 
 def initialize_missing_statuses(level_id, academic_year_name, logger):
     try:
@@ -147,3 +53,71 @@ def initialize_missing_statuses(level_id, academic_year_name, logger):
     except Exception as e:
         logger.error(f"Unexpected error in initialize_missing_statuses: {str(e)}")
         return PassFailedStatus.objects.none()
+
+
+def create_pass_failed_status(student, level, academic_year, enrollment, status='PENDING', validated_by=None):
+    """Create or update pass/fail/conditional status with manual assignment and promotion."""
+    valid_statuses = [choice[0] for choice in PassFailedStatus.STATUS_CHOICES]
+    if status not in valid_statuses:
+        logger.error(f"Invalid status: {status} for student {student.id}")
+        raise ValueError(f"Invalid status: {status}. Must be one of {valid_statuses}")
+
+    grades_complete = Grade.objects.filter(enrollment=enrollment).exists()
+    if not grades_complete and status in ['PASS', 'FAIL', 'CONDITIONAL']:
+        logger.error(f"Cannot set {status} for student {student.id}: grades incomplete")
+        raise ValueError(f"Cannot set {status} status: grades are incomplete for student {student.id}")
+
+    with transaction.atomic():
+        # Create or update PassFailedStatus
+        pass_failed, created = PassFailedStatus.objects.update_or_create(
+            student=student,
+            level=level,
+            academic_year=academic_year,
+            enrollment=enrollment,
+            defaults={
+                'status': status,
+                'grades_complete': grades_complete,
+                'validated_by': validated_by,
+                'validated_at': datetime.datetime.now() if validated_by else None
+            }
+        )
+
+        # Promotion for PASS or COND
+        if status in ['PASS', 'CONDITIONAL']:
+            try:
+                current_level_id = int(level.name)
+                next_level_id = current_level_id + 1
+                if next_level_id > 9:  # Assuming max level is 9
+                    logger.warning(f"No promotion for student {student.id}: at max level {current_level_id}")
+                    return pass_failed
+
+                next_level = Level.objects.filter(name=str(next_level_id)).first()
+                if not next_level:
+                    logger.error(f"Next level {next_level_id} not found for student {student.id}")
+                    raise ValueError(f"Next level {next_level_id} does not exist")
+
+                current_year = academic_year.name
+                start_year = int(current_year.split('/')[0]) + 1
+                next_year_name = f"{start_year}/{start_year + 1}"
+                next_academic_year = AcademicYear.objects.filter(name=next_year_name).first()
+                if not next_academic_year:
+                    logger.error(f"Next academic year {next_year_name} not found for student {student.id}")
+                    raise ValueError(f"Academic year {next_year_name} does not exist")
+
+                # Check for existing enrollment to avoid unique_together violation
+                existing_enrollment = Enrollment.objects.filter(
+                    student=student,
+                    level=next_level
+                ).first()
+                if not existing_enrollment:
+                    create_enrollment_for_student(student, next_level, next_academic_year)
+                    logger.info(f"Promoted student {student.id} to level {next_level.name}, year {next_year_name}")
+                else:
+                    logger.warning(f"Enrollment already exists for student {student.id} in level {next_level.name}")
+
+            except ValueError as e:
+                logger.error(f"Error promoting student {student.id}: {str(e)}")
+                raise
+
+        logger.info(f"{'Created' if created else 'Updated'} PassFailedStatus for student {student.id}: {status}")
+        return pass_failed

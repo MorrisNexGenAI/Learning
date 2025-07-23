@@ -7,7 +7,8 @@ from rest_framework.response import Response
 from .serializers import PassFailedStatusSerializer
 from .models import PassFailedStatus
 from academic_years.models import AcademicYear
-from .helper import handle_validate_status, initialize_missing_statuses
+from .helper import initialize_missing_statuses
+from evaluations.statues_logics import handle_validate_status
 from grade_sheets.yearly_pdf import generate_yearly_pdf
 from grade_sheets.models import StudentGradeSheetPDF
 

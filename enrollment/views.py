@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Enrollment
 from .serializers import EnrollmentSerializer
-from .utils import edit_student
+from students.utils import edit_student
 import logging
 
 logger = logging.getLogger(__name__)
